@@ -1,3 +1,5 @@
+![Banner do Isótopus](assets/isotopus-banner.png)
+
 # Isótopus
 
 Player de música local para Linux e Windows, feito para organizar e ouvir uma coleção pessoal. A biblioteca fica no computador; o app oferece playlists, busca, favoritos, letras sincronizadas, equalizador e controles de mídia do sistema.
