@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, screen } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const fsSync = require('node:fs');
@@ -10,11 +10,12 @@ const { buildM3u } = require('./playlist');
 let server;
 let serverPort;
 let win;
-let rpc;
 let settings = { folders: [] };
 let scanTimer;
 const watchers = [];
 let library;
+let lyricsRequestAt = 0;
+let lyricsRetryAt = 0;
 
 function settingsPath() { return path.join(app.getPath('userData'), 'settings.json'); }
 async function loadSettings() {
@@ -35,8 +36,12 @@ function serveApp() {
   }));
 }
 function createWindow(port) {
+  const { width: workWidth, height: workHeight } = screen.getPrimaryDisplay().workAreaSize;
+  const minWidth = Math.min(1040, workWidth), minHeight = Math.min(700, workHeight);
   win = new BrowserWindow({
-    width: 1440, height: 920, minWidth: 1000, minHeight: 680,
+    width: Math.min(1600, Math.max(minWidth, Math.floor(workWidth * .96))),
+    height: Math.min(1000, Math.max(minHeight, Math.floor(workHeight * .92))),
+    minWidth, minHeight,
     backgroundColor: '#eddbc4', title: 'Isótopus',
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: true }
   });
@@ -108,30 +113,68 @@ ipcMain.handle('playlist:export', async (_event, ids) => {
   await fs.writeFile(result.filePath, buildM3u(tracks), { encoding: 'utf8', mode: 0o600 });
   return { ok: true, count: tracks.length, path: result.filePath };
 });
-
-ipcMain.handle('discord:connect', async (_event, { clientId, track }) => {
-  try {
-    if (!clientId) throw new Error('Informe o Application ID do Discord nas configurações.');
-    if (rpc) { try { await rpc.destroy(); } catch {} rpc = null; }
-    const DiscordRPC = require('discord-rpc');
-    rpc = new DiscordRPC.Client({ transport: 'ipc' });
-    await rpc.login({ clientId });
-    await setActivity(track || {});
-    return { ok: true };
-  } catch (error) { return { ok: false, error: error.message || 'Não foi possível conectar ao Discord.' }; }
+ipcMain.handle('lyrics:local', async (_event, id) => {
+  if (typeof id !== 'string') return { content: '' };
+  const audioPath = library.resolveTrackPath(id);
+  if (!audioPath) return { content: '' };
+  const lyricPath = path.join(path.dirname(audioPath), `${path.basename(audioPath, path.extname(audioPath))}.lrc`);
+  try { return { content: await fs.readFile(lyricPath, 'utf8'), path: lyricPath }; }
+  catch { return { content: '' }; }
 });
-async function setActivity(track = {}) {
-  if (!rpc) return { ok: false, error: 'Discord não conectado.' };
-  if (!track.title) { await rpc.clearActivity(); return { ok: true }; }
+ipcMain.handle('lyrics:openFile', async () => {
+  const result = await dialog.showOpenDialog(win, { title: 'Abrir letra', properties: ['openFile'], filters: [{ name: 'Letras', extensions: ['lrc', 'txt'] }] });
+  if (result.canceled || !result.filePaths.length) return { cancelled: true };
+  const stat = await fs.stat(result.filePaths[0]);
+  if (stat.size > 1024 * 1024) return { error: 'O arquivo de letra passa de 1 MB.' };
+  const content = await fs.readFile(result.filePaths[0], 'utf8');
+  return { content, path: result.filePaths[0] };
+});
+ipcMain.handle('lyrics:save', async (_event, { id, content }) => {
+  if (typeof id !== 'string' || typeof content !== 'string' || Buffer.byteLength(content, 'utf8') > 1024 * 1024) return { ok: false, error: 'Letra inválida.' };
+  const audioPath = library.resolveTrackPath(id);
+  if (!audioPath) return { ok: false, error: 'A faixa não está mais na biblioteca.' };
+  const defaultPath = path.join(path.dirname(audioPath), `${path.basename(audioPath, path.extname(audioPath))}.lrc`);
+  const result = await dialog.showSaveDialog(win, { title: 'Salvar letra sincronizada', defaultPath, filters: [{ name: 'Letra LRC', extensions: ['lrc'] }] });
+  if (result.canceled || !result.filePath) return { cancelled: true };
+  const file = path.extname(result.filePath) ? result.filePath : `${result.filePath}.lrc`;
+  await fs.writeFile(file, content, { encoding: 'utf8', mode: 0o600 });
+  return { ok: true, path: file };
+});
+ipcMain.handle('lyrics:search', async (_event, track) => {
+  if (!track || typeof track.title !== 'string' || typeof track.artist !== 'string') return { ok: false, error: 'Metadados da faixa inválidos.' };
+  const now = Date.now();
+  if (now < lyricsRetryAt) return { ok: false, error: 'Aguarde alguns segundos antes de buscar outra letra.' };
+  const delay = Math.max(0, 300 - (now - lyricsRequestAt));
+  if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+  lyricsRequestAt = Date.now();
+  const params = new URLSearchParams({ track_name: track.title.slice(0, 256), artist_name: track.artist.slice(0, 256) });
+  if (track.album) params.set('album_name', String(track.album).slice(0, 256));
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
   try {
-    await rpc.setActivity({ details: track.title.slice(0, 128), state: `${track.artist || 'Arquivos locais'} · ${track.playing ? 'Reproduzindo' : 'Pausado'}`.slice(0, 128), instance: false });
-    return { ok: true };
-  } catch (error) { return { ok: false, error: error.message }; }
-}
-ipcMain.handle('discord:activity', (_event, track) => setActivity(track));
-ipcMain.handle('discord:disconnect', async () => {
-  if (rpc) { try { await rpc.clearActivity(); await rpc.destroy(); } catch {} rpc = null; }
-  return { ok: true };
+    const response = await fetch(`https://lrclib.net/api/search?${params}`, {
+      headers: { 'User-Agent': 'Isotopus/0.1.3 (https://github.com/)', 'Accept': 'application/json' }, signal: controller.signal
+    });
+    if (response.status === 429) {
+      const retryAfter = response.headers.get('retry-after');
+      const seconds = Number(retryAfter);
+      lyricsRetryAt = Number.isFinite(seconds) && seconds > 0 ? Date.now() + seconds * 1000 : retryAfter ? (Date.parse(retryAfter) || Date.now() + 5000) : Date.now() + 5000;
+      return { ok: false, error: 'Muitas buscas em sequência. Tente novamente em alguns segundos.' };
+    }
+    if (!response.ok) return { ok: false, error: `Serviço de letras indisponível (${response.status}).` };
+    const records = await response.json();
+    if (!Array.isArray(records)) return { ok: false, error: 'Resposta inesperada do serviço de letras.' };
+    const duration = Number(track.duration) || 0;
+    records.sort((a, b) => Math.abs((Number(a.duration) || 0) - duration) - Math.abs((Number(b.duration) || 0) - duration));
+    return { ok: true, records: records.slice(0, 12).map(record => ({
+      title: String(record.trackName || record.name || '').slice(0, 256), artist: String(record.artistName || '').slice(0, 256),
+      album: String(record.albumName || '').slice(0, 256), duration: Number(record.duration) || 0,
+      plainLyrics: String(record.plainLyrics || '').slice(0, 100000), syncedLyrics: String(record.syncedLyrics || '').slice(0, 100000),
+      instrumental: Boolean(record.instrumental)
+    })) };
+  } catch (error) {
+    return { ok: false, error: error.name === 'AbortError' ? 'A busca de letras demorou demais.' : 'Não consegui acessar o serviço de letras.' };
+  } finally { clearTimeout(timeout); }
 });
 
 app.whenReady().then(async () => {
@@ -145,7 +188,6 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', async () => {
   clearTimeout(scanTimer);
   while (watchers.length) watchers.pop().close();
-  if (rpc) { try { await rpc.destroy(); } catch {} }
   if (server) server.close();
   if (process.platform !== 'darwin') app.quit();
 });
