@@ -44,7 +44,6 @@ Os arquivos gerados ficam em `dist/`. As configurações de build e ícones fica
 
 Os instaladores históricos e atuais estão organizados em `release-assets/`, por versão (`v0.1.0` a `v0.1.9`). Eles são mantidos fora dos commits e enviados como anexos de Releases do GitHub, inclusive porque alguns arquivos ultrapassam o limite de tamanho de arquivos comuns do Git.
 
-Consulte [PUBLISHING.md](PUBLISHING.md) para criar o repositório, enviar o código e publicar os instaladores. Para incluir builds futuras, copie os arquivos para a pasta da versão correspondente em `release-assets/` e execute `scripts/publish-releases.sh`.
 
 ## Instalar uma build
 
