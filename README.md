@@ -1,6 +1,6 @@
 # Isótopus
 
-Player de música local para Ubuntu. A biblioteca é indexada a partir de uma ou mais pastas escolhidas no app. A interface exibe tags, capas, duração, codec, taxa de amostragem e profundidade de bits quando disponíveis. Os arquivos de áudio permanecem locais; buscas de letras enviam apenas metadados da faixa ao LRCLIB quando solicitadas.
+Player de música local para Ubuntu. A biblioteca é indexada a partir de uma ou mais pastas escolhidas no app. A interface exibe tags, capas, duração, codec, taxa de amostragem e profundidade de bits quando disponíveis. Os arquivos de áudio permanecem locais. Quando solicitadas, buscas de letras enviam metadados da faixa ao LRCLIB; a busca manual abre o navegador com o título e artista para pesquisa.
 
 ## Formatos
 
@@ -10,7 +10,7 @@ O Isótopus classifica o codec armazenado. Ele não consegue confirmar se um FLA
 
 ## Playlists e letras
 
-Crie playlists locais no painel lateral e adicione faixas pelo botão `＋` dos cards. A fila pode ser exportada como M3U8. Clique na capa do player para abrir a tela de reprodução com letras: o Isótopus lê um `.lrc` ao lado da música, abre arquivos `.lrc`/`.txt`, busca faixas sob demanda no [LRCLIB](https://lrclib.net/docs) e permite ajustar o offset ou marcar cada linha no tempo atual. Letras podem ser salvas como `.lrc` junto da faixa.
+Crie playlists locais no painel lateral e adicione faixas pelo botão `＋` dos cards. A fila pode ser exportada como M3U8. Clique na capa do player para abrir a tela de reprodução com letras: o Isótopus lê um `.lrc` ao lado da música, abre arquivos `.lrc`/`.txt`, busca faixas sob demanda no [LRCLIB](https://lrclib.net/docs) e permite ajustar o offset ou marcar cada linha no tempo atual. Se a busca não encontrar a letra, pesquise no navegador, copie o texto e cole no campo do app. Tempos no formato LRC são detectados automaticamente; texto simples pode ser sincronizado linha por linha. Letras podem ser salvas como `.lrc` junto da faixa.
 
 ## Executar
 

@@ -425,6 +425,12 @@ function setLyricsStatus(message) { $('lyricsStatus').textContent = message; }
 function showLyricsEmpty(message) {
   $('lyricsLines').replaceChildren(); const empty = document.createElement('div'); empty.className = 'lyrics-empty'; empty.textContent = message; $('lyricsLines').append(empty);
 }
+function showLyricsActions() {
+  const actions = document.createElement('div'); actions.className = 'lyrics-empty-actions';
+  const web = document.createElement('button'); web.type = 'button'; web.className = 'secondary-button'; web.textContent = 'Pesquisar letra na web'; web.addEventListener('click', () => { openLyricsPasteDialog(); searchLyricsWeb(); });
+  const paste = document.createElement('button'); paste.type = 'button'; paste.className = 'secondary-button'; paste.textContent = 'Colar letra copiada'; paste.addEventListener('click', openLyricsPasteDialog);
+  actions.append(web, paste); $('lyricsLines').append(actions);
+}
 function applyLyricsText(raw, source = 'Letra adicionada') {
   const parsed = window.IsotopusLyrics.parseLyrics(raw);
   currentLyrics = { raw: String(raw || ''), synced: parsed.synced, lines: parsed.lines, source };
@@ -466,17 +472,18 @@ async function loadCurrentLyrics() {
   if (!currentTrack) return;
   lyricsTrackId = currentTrack.id;
   $('lyricsTrackTitle').textContent = currentTrack.title; $('lyricsTrackArtist').textContent = `${currentTrack.artist} · ${currentTrack.album}`;
-  $('lyricsHeading').textContent = currentTrack.title; coverStyle(currentTrack, $('lyricsCover'));
+  $('lyricsHeading').textContent = currentTrack.title; $('lyricsHeading').title = currentTrack.title; coverStyle(currentTrack, $('lyricsCover'));
   currentLyrics = { raw: '', synced: false, lines: [], source: '' }; manualLyricsMode = false;
   $('lyricsSyncPanel').hidden = true; $('lyricsMenu').hidden = true;
   showLyricsEmpty('Procurando uma letra local…'); setLyricsStatus('Verificando arquivo .lrc local');
   const result = await window.isotopus.getLocalLyrics(currentTrack.id);
   if (lyricsTrackId !== currentTrack.id) return;
   if (result?.content) applyLyricsText(result.content, 'Arquivo local');
-  else { showLyricsEmpty('Nenhuma letra local. Abra o menu para buscar na web ou importar um arquivo.'); setLyricsStatus('Sem letra para esta faixa'); }
+  else { showLyricsEmpty('Nenhuma letra encontrada para esta faixa.'); showLyricsActions(); setLyricsStatus('Sem letra para esta faixa'); }
 }
 async function openLyricsScreen() {
   if (!currentTrack) { toast('Reproduza ou selecione uma faixa primeiro.'); return; }
+  window.getSelection?.()?.removeAllRanges();
   const screen = $('lyricsScreen'); screen.hidden = false; screen.classList.remove('closing');
   $('lyricsTrackTitle').textContent = currentTrack.title; $('lyricsTrackArtist').textContent = `${currentTrack.artist} · ${currentTrack.album}`;
   coverStyle(currentTrack, $('lyricsCover')); updateTimeline();
@@ -509,6 +516,25 @@ async function searchLyricsOnline() {
   }
   if (!result.records.length) { const empty = document.createElement('div'); empty.className = 'empty-state'; empty.textContent = 'Nenhuma letra encontrada para esta faixa.'; list.append(empty); }
   $('lyricsSearchDialog').showModal(); setLyricsStatus(`${result.records.length} resultados do LRCLIB`);
+}
+function openLyricsPasteDialog() {
+  $('lyricsMenu').hidden = true;
+  $('lyricsPasteDialog').showModal();
+  $('lyricsPasteText').focus();
+}
+async function searchLyricsWeb() {
+  if (!currentTrack) return;
+  const result = await window.isotopus.searchLyricsWeb({ title: currentTrack.title, artist: currentTrack.artist });
+  if (!result?.ok) setLyricsStatus(result?.error || 'Não foi possível abrir a busca na web.');
+  else setLyricsStatus('Busca aberta no navegador. Copie a letra e cole no campo.');
+}
+function applyPastedLyrics() {
+  const text = $('lyricsPasteText').value.trim();
+  if (!text) { $('lyricsPasteText').focus(); setLyricsStatus('Cole uma letra antes de continuar.'); return; }
+  applyLyricsText(text, 'Letra colada');
+  $('lyricsPasteDialog').close();
+  $('lyricsPasteText').value = '';
+  if (!currentLyrics.synced) setLyricsStatus('Letra adicionada sem tempos. Use “Sincronizar linhas manualmente” para marcar cada linha.');
 }
 async function openLyricsFile() {
   $('lyricsMenu').hidden = true;
@@ -614,6 +640,10 @@ $('trackArt').addEventListener('click', openLyricsScreen);
 $('lyricsMinimize').addEventListener('click', minimizeLyricsScreen);
 $('lyricsMenuButton').addEventListener('click', () => { $('lyricsMenu').hidden = !$('lyricsMenu').hidden; });
 $('searchLyricsButton').addEventListener('click', searchLyricsOnline);
+$('pasteLyricsButton').addEventListener('click', openLyricsPasteDialog);
+$('searchWebLyricsButton').addEventListener('click', searchLyricsWeb);
+$('applyLyricsPaste').addEventListener('click', applyPastedLyrics);
+$('cancelLyricsPaste').addEventListener('click', () => $('lyricsPasteDialog').close());
 $('openLyricsButton').addEventListener('click', openLyricsFile);
 $('saveLyricsButton').addEventListener('click', saveCurrentLyrics);
 $('syncLyricsButton').addEventListener('click', () => { $('lyricsMenu').hidden = true; $('lyricsSyncPanel').hidden = !$('lyricsSyncPanel').hidden; });

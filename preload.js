@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('isotopus', {
   openLyricsFile: () => ipcRenderer.invoke('lyrics:openFile'),
   saveLyrics: (id, content) => ipcRenderer.invoke('lyrics:save', { id, content }),
   searchLyrics: track => ipcRenderer.invoke('lyrics:search', track),
+  searchLyricsWeb: track => ipcRenderer.invoke('lyrics:webSearch', track),
   onLibraryUpdated: callback => {
     const listener = (_event, data) => callback(data);
     ipcRenderer.on('library:updated', listener);

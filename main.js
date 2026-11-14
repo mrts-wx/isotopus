@@ -176,6 +176,14 @@ ipcMain.handle('lyrics:search', async (_event, track) => {
     return { ok: false, error: error.name === 'AbortError' ? 'A busca de letras demorou demais.' : 'Não consegui acessar o serviço de letras.' };
   } finally { clearTimeout(timeout); }
 });
+ipcMain.handle('lyrics:webSearch', async (_event, track) => {
+  if (!track || typeof track.title !== 'string') return { ok: false, error: 'Faixa inválida.' };
+  const query = [track.title, track.artist, 'letra'].filter(value => typeof value === 'string' && value.trim()).join(' ');
+  const url = new URL('https://www.google.com/search');
+  url.searchParams.set('q', query.slice(0, 600));
+  try { await shell.openExternal(url.href); return { ok: true }; }
+  catch { return { ok: false, error: 'Não consegui abrir o navegador.' }; }
+});
 
 app.whenReady().then(async () => {
   await loadSettings();
