@@ -1,0 +1,21 @@
+/* Floating dock surfaces, retaining the existing sidebar width and player height. */
+body{height:100vh;display:flex;flex-direction:column}
+.app-shell{height:auto;min-height:0;flex:1 1 auto}
+.sidebar{margin:12px 0 12px 12px;min-height:0;border:1px solid #dfcbb5;border-radius:16px;box-shadow:0 8px 28px #5c52591c;background:#f5e8d8}
+.player-bar{height:92px;flex:0 0 92px;margin:0 12px 12px;border:1px solid #dfcbb5;border-radius:16px;box-shadow:0 8px 28px #5c52591c;background:rgb(247 236 222 / 94%);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px)}
+.sidebar-bottom{border-color:#dfcbb5}
+.transport{gap:10px;margin:0 0 8px;min-height:38px}
+.transport-button,.tool-button,.like-button{display:inline-flex;align-items:center;justify-content:center;line-height:1;flex:none}
+.transport-button{width:32px;height:32px;padding:0;border-radius:10px;font-size:16px;transition:color .2s var(--smooth),background-color .2s var(--smooth),transform .3s var(--spring)}
+.transport-button:hover{background:#eaddca;transform:translateY(-1px)}
+.transport-button:active,.play-button:active{transform:scale(.94)}
+.play-button{width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;flex:none;padding:0 0 0 2px;border:1px solid #8eb394;border-radius:12px;background:#a3c9a7;color:#405c47;line-height:1;font-size:13px;box-shadow:0 3px 10px #7099782b;transition:transform .35s var(--spring),box-shadow .3s var(--smooth),background-color .25s var(--smooth)}
+.play-button:hover{background:#add2b1;box-shadow:0 5px 14px #70997838}
+.player-center{max-width:430px}
+.timeline{gap:10px}
+.timeline input,.player-tools input{height:4px}
+.like-button{width:30px;height:30px;padding:0;border-radius:9px;transition:background-color .2s var(--smooth),color .2s var(--smooth)}
+.like-button:hover,.tool-button:hover{background:#eaddca;border-radius:9px}
+.player-tools{gap:10px}
+@media(max-width:1150px){.sidebar{margin-left:10px}.player-bar{margin-inline:10px}}
+@media(max-width:850px){.sidebar{margin-left:8px}.player-bar{margin-inline:8px}}

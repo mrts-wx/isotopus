@@ -1,0 +1,133 @@
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
+const path = require('node:path');
+const fs = require('node:fs/promises');
+const fsSync = require('node:fs');
+const { randomUUID } = require('node:crypto');
+const { createStaticServer } = require('./server');
+const { createLibrary } = require('./library');
+
+let server;
+let serverPort;
+let win;
+let rpc;
+let settings = { folders: [] };
+let scanTimer;
+const watchers = [];
+let library;
+
+function settingsPath() { return path.join(app.getPath('userData'), 'settings.json'); }
+async function loadSettings() {
+  try {
+    const stored = JSON.parse(await fs.readFile(settingsPath(), 'utf8'));
+    settings.folders = Array.isArray(stored.folders) ? stored.folders.filter(folder => typeof folder === 'string') : [];
+  } catch { settings.folders = []; }
+}
+async function saveSettings() {
+  await fs.mkdir(app.getPath('userData'), { recursive: true });
+  await fs.writeFile(settingsPath(), JSON.stringify({ folders: settings.folders }, null, 2), { mode: 0o600 });
+}
+function serveApp() {
+  server = createStaticServer(__dirname, id => library.resolveAsset(id));
+  return new Promise(resolve => server.listen(0, '127.0.0.1', () => {
+    serverPort = server.address().port;
+    resolve(serverPort);
+  }));
+}
+function createWindow(port) {
+  win = new BrowserWindow({
+    width: 1440, height: 920, minWidth: 1000, minHeight: 680,
+    backgroundColor: '#eddbc4', title: 'Isótopus',
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: true }
+  });
+  win.loadURL(`http://127.0.0.1:${port}`);
+  win.setMenuBarVisibility(false);
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    let parsed;
+    try { parsed = new URL(url); } catch { return { action: 'deny' }; }
+    if (parsed.protocol === 'https:') shell.openExternal(parsed.href);
+    return { action: 'deny' };
+  });
+}
+async function scanLibrary() {
+  const tracks = await library.scan(settings.folders, `http://127.0.0.1:${serverPort}`);
+  if (win && !win.isDestroyed()) win.webContents.send('library:updated', { tracks, folders: settings.folders });
+  return tracks;
+}
+function watchFolders() {
+  while (watchers.length) watchers.pop().close();
+  const roots = settings.folders.filter(folder => fsSync.existsSync(folder));
+  if (!roots.length) return;
+  for (const root of roots) {
+    const changed = () => {
+      clearTimeout(scanTimer);
+      scanTimer = setTimeout(() => scanLibrary().catch(() => {}), 1200);
+    };
+    let current;
+    try { current = fsSync.watch(root, { recursive: true }, changed); }
+    catch { current = fsSync.watch(root, changed); }
+    current.on('error', () => current.close());
+    current.unref?.();
+    watchers.push(current);
+  }
+}
+
+ipcMain.handle('library:get', async () => ({ tracks: await scanLibrary(), folders: settings.folders }));
+ipcMain.handle('library:chooseFolder', async () => {
+  const result = await dialog.showOpenDialog(win, { title: 'Escolha uma pasta de músicas', properties: ['openDirectory', 'multiSelections'] });
+  if (result.canceled || !result.filePaths.length) return { cancelled: true, folders: settings.folders };
+  settings.folders = [...new Set([...settings.folders, ...result.filePaths])];
+  await saveSettings(); watchFolders();
+  return { tracks: await scanLibrary(), folders: settings.folders };
+});
+ipcMain.handle('library:removeFolder', async (_event, folder) => {
+  settings.folders = settings.folders.filter(item => item !== folder);
+  await saveSettings(); watchFolders();
+  return { tracks: await scanLibrary(), folders: settings.folders };
+});
+ipcMain.handle('library:rescan', async () => ({ tracks: await scanLibrary(), folders: settings.folders }));
+ipcMain.handle('library:mediaUrl', (_event, id) => {
+  const asset = library.resolveAsset(id);
+  if (!asset?.path) return '';
+  return `http://127.0.0.1:${serverPort}/media/${encodeURIComponent(id)}`;
+});
+
+ipcMain.handle('discord:connect', async (_event, { clientId, track }) => {
+  try {
+    if (!clientId) throw new Error('Informe o Application ID do Discord nas configurações.');
+    if (rpc) { try { await rpc.destroy(); } catch {} rpc = null; }
+    const DiscordRPC = require('discord-rpc');
+    rpc = new DiscordRPC.Client({ transport: 'ipc' });
+    await rpc.login({ clientId });
+    await setActivity(track || {});
+    return { ok: true };
+  } catch (error) { return { ok: false, error: error.message || 'Não foi possível conectar ao Discord.' }; }
+});
+async function setActivity(track = {}) {
+  if (!rpc) return { ok: false, error: 'Discord não conectado.' };
+  if (!track.title) { await rpc.clearActivity(); return { ok: true }; }
+  try {
+    await rpc.setActivity({ details: track.title.slice(0, 128), state: `${track.artist || 'Arquivos locais'} · ${track.playing ? 'Reproduzindo' : 'Pausado'}`.slice(0, 128), instance: false });
+    return { ok: true };
+  } catch (error) { return { ok: false, error: error.message }; }
+}
+ipcMain.handle('discord:activity', (_event, track) => setActivity(track));
+ipcMain.handle('discord:disconnect', async () => {
+  if (rpc) { try { await rpc.clearActivity(); await rpc.destroy(); } catch {} rpc = null; }
+  return { ok: true };
+});
+
+app.whenReady().then(async () => {
+  await loadSettings();
+  library = createLibrary(path.join(app.getPath('userData'), 'library-cache'));
+  const port = await serveApp();
+  createWindow(port);
+  watchFolders();
+  scanLibrary().catch(error => console.error('Library scan failed:', error));
+});
+app.on('window-all-closed', async () => {
+  clearTimeout(scanTimer);
+  while (watchers.length) watchers.pop().close();
+  if (rpc) { try { await rpc.destroy(); } catch {} }
+  if (server) server.close();
+  if (process.platform !== 'darwin') app.quit();
+});

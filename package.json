@@ -1,0 +1,24 @@
+{
+  "name": "isotopus",
+  "version": "0.1.0",
+  "private": true,
+  "author": {
+    "name": "Local Build",
+    "email": "local@localhost"
+  },
+  "homepage": "https://github.com/",
+  "desktopName": "com.isotopus.musicplayer",
+  "description": "Player local de música lossless para Ubuntu",
+  "license": "UNLICENSED",
+  "main": "main.js",
+  "dependencies": {
+    "discord-rpc": "^4.0.1",
+    "music-metadata": "^11.13.0"
+  },
+  "allowScripts": {
+    "electron@45.3.2": true
+  },
+  "overrides": {
+    "minimatch": "^11.0.1"
+  }
+}

@@ -1,0 +1,132 @@
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const crypto = require('node:crypto');
+
+const AUDIO_EXTENSIONS = new Set(['.flac', '.wav', '.wave', '.aif', '.aiff', '.m4a', '.mp3', '.aac', '.ogg', '.oga', '.opus']);
+const idFor = value => crypto.createHash('sha256').update(value).digest('hex').slice(0, 24);
+const asText = value => Array.isArray(value) ? value.join(', ') : (value == null ? '' : String(value));
+
+async function findAudioFiles(folders) {
+  const files = [];
+  const pending = folders.map(folder => path.resolve(folder));
+  while (pending.length) {
+    const current = pending.pop();
+    let entries;
+    try { entries = await fs.readdir(current, { withFileTypes: true }); } catch { continue; }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue;
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) pending.push(fullPath);
+      else if (entry.isFile() && AUDIO_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) files.push(fullPath);
+    }
+  }
+  return files;
+}
+
+function isLossless(codec, container, ext) {
+  const label = `${codec || ''} ${container || ''} ${ext}`.toUpperCase();
+  return /FLAC|ALAC|PCM|AIFF|WAVPACK|APE/.test(label);
+}
+
+function fallbackTrack(file, stat) {
+  const ext = path.extname(file).slice(1).toUpperCase();
+  return {
+    id: idFor(file), title: path.basename(file, path.extname(file)), artist: 'Artista desconhecido', albumArtist: '', album: 'Álbum desconhecido',
+    codec: ext || 'Áudio', lossless: isLossless(ext, ext, ext), duration: 0, sampleRate: 0, bitDepth: 0, bitrate: 0,
+    trackNo: null, discNo: null, genre: '', year: null, size: stat.size, modified: stat.mtimeMs, pathLabel: path.basename(file)
+  };
+}
+
+async function parseTrack(file, stat, parseFile) {
+  try {
+    const metadata = await parseFile(file, { duration: true });
+    const common = metadata.common || {};
+    const format = metadata.format || {};
+    const ext = path.extname(file).toLowerCase();
+    const codec = asText(format.codec || format.container || ext.slice(1)).toUpperCase();
+    const pic = common.picture?.[0];
+    const coverId = pic?.data ? `c${idFor(`${asText(common.albumArtist || common.artist)}|${asText(common.album)}`)}` : '';
+    return {
+      id: idFor(file), title: asText(common.title) || path.basename(file, ext),
+      artist: asText(common.artist) || 'Artista desconhecido', albumArtist: asText(common.albumartist || common.albumArtist),
+      album: asText(common.album) || 'Álbum desconhecido', codec,
+      lossless: isLossless(codec, asText(format.container), ext), duration: Number(format.duration) || 0,
+      sampleRate: Number(format.sampleRate) || 0, bitDepth: Number(format.bitsPerSample) || 0,
+      bitrate: Number(format.bitrate) || 0, trackNo: common.track?.no || null, discNo: common.disk?.no || null,
+      genre: asText(common.genre), year: common.year || null, size: stat.size, modified: stat.mtimeMs,
+      pathLabel: path.basename(file), coverId,
+      coverBuffer: pic?.data ? Buffer.from(pic.data) : null, coverType: pic?.format || 'image/jpeg'
+    };
+  } catch { return fallbackTrack(file, stat); }
+}
+
+function createLibrary(cacheDirectory) {
+  const cache = new Map();
+  const assets = new Map();
+  let cachedParser;
+  let loaded = false;
+  async function loadCache() {
+    if (loaded) return;
+    loaded = true;
+    if (!cacheDirectory) return;
+    try {
+      const records = JSON.parse(await fs.readFile(path.join(cacheDirectory, 'index.json'), 'utf8'));
+      for (const [file, record] of records) {
+        cache.set(file, record);
+        if (record.track.coverId) {
+          try { assets.set(record.track.coverId, { buffer: await fs.readFile(path.join(cacheDirectory, `${record.track.coverId}.cover`)), contentType: record.track.coverType || 'image/jpeg' }); } catch {}
+        }
+      }
+    } catch {}
+  }
+  async function saveCache() {
+    if (!cacheDirectory) return;
+    await fs.mkdir(cacheDirectory, { recursive: true });
+    const records = [...cache.entries()];
+    await fs.writeFile(path.join(cacheDirectory, 'index.json.tmp'), JSON.stringify(records));
+    await fs.rename(path.join(cacheDirectory, 'index.json.tmp'), path.join(cacheDirectory, 'index.json'));
+  }
+  async function scan(folders, origin) {
+    await loadCache();
+    if (!cachedParser) cachedParser = import('music-metadata').then(module => module.parseFile);
+    const parseFile = await cachedParser;
+    const files = await findAudioFiles(folders);
+    const present = new Set(files);
+    for (const [file, record] of cache) {
+      if (!present.has(file)) { cache.delete(file); assets.delete(`a${record.track.id}`); }
+    }
+    const tracks = new Array(files.length);
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < files.length) {
+        const index = cursor++;
+        const file = files[index];
+        try {
+          const stat = await fs.stat(file);
+          const signature = `${stat.size}:${stat.mtimeMs}`;
+          let track = cache.get(file)?.signature === signature ? cache.get(file).track : await parseTrack(file, stat, parseFile);
+          const audioId = `a${track.id}`;
+          assets.set(audioId, { path: file });
+          if (track.coverBuffer) {
+            assets.set(track.coverId, { buffer: track.coverBuffer, contentType: track.coverType });
+            if (cacheDirectory) await fs.writeFile(path.join(cacheDirectory, `${track.coverId}.cover`), track.coverBuffer).catch(() => {});
+            delete track.coverBuffer;
+            delete track.coverType;
+          }
+          track.streamUrl = `${origin}/media/${audioId}`;
+          track.coverUrl = track.coverId ? `${origin}/media/${track.coverId}` : '';
+          cache.set(file, { signature, track });
+          tracks[index] = track;
+        } catch { tracks[index] = null; }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(6, files.length) }, worker));
+    const coverIds = new Set(tracks.filter(Boolean).map(track => track.coverId).filter(Boolean));
+    for (const id of assets.keys()) if (id.startsWith('c') && !coverIds.has(id)) assets.delete(id);
+    await saveCache().catch(() => {});
+    return tracks.filter(Boolean).sort((a, b) => a.artist.localeCompare(b.artist) || a.album.localeCompare(b.album) || a.title.localeCompare(b.title));
+  }
+  return { scan, resolveAsset: id => assets.get(id) || null, clear: () => { cache.clear(); assets.clear(); loaded = true; } };
+}
+
+module.exports = { AUDIO_EXTENSIONS, createLibrary, findAudioFiles, isLossless, parseTrack };

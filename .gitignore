@@ -1,0 +1,19 @@
+# Dependencies and generated build output
+node_modules/
+dist/
+out/
+work/
+
+# Binary releases are uploaded as GitHub Release assets, not committed to Git
+release-assets/
+*.deb
+*.pacman
+*.exe
+*.blockmap
+
+# Local/editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+npm-debug.log*
