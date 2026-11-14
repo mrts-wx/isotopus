@@ -10,7 +10,7 @@ let standbyAudio = new Audio();
 standbyAudio.preload = 'metadata'; standbyAudio.volume = 0;
 let crossfadeSeconds = 0;
 let crossfadeActive = false;
-let crossfadeFrame = 0;
+let crossfadeTimer = 0;
 let crossfadeProgress = 0;
 let baseVolume = 0.75;
 let crossfadeFromTrack = null;
@@ -59,6 +59,13 @@ function qualityText(track) {
     return `${track.codec}${depth}${rate}`;
   }
   return `${track.codec || 'ÁUDIO'}${track.bitrate ? ` · ${Math.round(track.bitrate / 1000)} kbps` : ''}`;
+}
+function setPlayIcon(button, playing) {
+  button.innerHTML = playing
+    ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5h3v14H8zM15 5h3v14h-3z"/></svg>'
+    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z"/></svg>';
+  const label = playing ? 'Pausar' : 'Reproduzir';
+  button.title = label; button.setAttribute('aria-label', label);
 }
 function setLibraryState() {
   const count = tracks.length;
@@ -113,7 +120,15 @@ function renderHome() {
   const recents = safeArray('recentIds').map(id => tracks.find(track => track.id === id)).filter(Boolean).slice(0, 6);
   const newest = [...tracks].sort((a, b) => b.modified - a.modified).slice(0, 6);
   const items = recents.length ? recents : newest;
-  renderCards(items, folders.length ? 'Adicione arquivos de áudio às pastas monitoradas para vê-los aqui.' : 'Escolha uma pasta para começar a ouvir sua coleção.');
+  const grid = $('recentGrid'); grid.replaceChildren();
+  $('recentHeading').textContent = recents.length ? 'Tocadas recentemente' : 'Adicionadas recentemente';
+  $('viewRecent').hidden = !recents.length;
+  if (!items.length) {
+    const empty = document.createElement('div'); empty.className = 'home-empty';
+    empty.innerHTML = '<span class="home-empty-mark">♫</span><div><b>Seu próximo som começa aqui</b><small>Escolha uma pasta de músicas e suas capas aparecerão neste espaço.</small></div>';
+    const button = document.createElement('button'); button.className = 'secondary-button'; button.textContent = 'Escolher pasta'; button.addEventListener('click', chooseFolders); empty.append(button); grid.append(empty); return;
+  }
+  items.forEach(track => grid.append(createTrackCard(track, items, 'track')));
 }
 function groupsForAlbums(items) {
   const groups = new Map();
@@ -303,7 +318,7 @@ function openView(view, setSelected = true) {
   if (setSelected) document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('selected', el.dataset.view === navView));
   syncTransportStates();
   setPageHeading(view);
-  $('quickSection').hidden = view !== 'listen'; $('catalogSection').hidden = view !== 'listen';
+  $('quickSection').hidden = view !== 'listen'; $('catalogSection').hidden = view !== 'listen'; $('recentSection').hidden = view !== 'listen';
   removeDynamic();
   if (view === 'listen') { renderHome(); return; }
   if (view === 'folders') {
@@ -331,7 +346,7 @@ function openView(view, setSelected = true) {
 }
 function searchLibrary(query) {
   if (!query) { openView(activeView); return; }
-  $('quickSection').hidden = true; $('catalogSection').hidden = true;
+  $('quickSection').hidden = true; $('catalogSection').hidden = true; $('recentSection').hidden = true;
   $('pageTitle').innerHTML = 'Resultados<span class="gold-dot">.</span>';
   $('pageSubtitle').textContent = `Busca local por “${query}”`;
   const lower = normalizeSearch(query);
@@ -340,6 +355,7 @@ function searchLibrary(query) {
 }
 function syncTransportStates() {
   const playing = Boolean(currentTrack && !audio.paused);
+  setPlayIcon($('playButton'), playing); setPlayIcon($('lyricsPlay'), playing);
   $('playButton').classList.toggle('active', playing);
   $('playButton').setAttribute('aria-pressed', String(playing));
   $('shuffleButton').classList.toggle('active', shuffled);
@@ -384,7 +400,7 @@ function renderCurrentTrack() {
     $('trackTitle').textContent = 'Escolha uma faixa'; $('trackArtist').textContent = 'Sua música, no seu ritmo';
     $('trackQuality').textContent = 'ÁUDIO LOCAL'; $('trackQuality').classList.remove('compressed');
     coverStyle({}, $('trackArt')); $('likeButton').textContent = '♡';
-    $('playButton').textContent = '▶'; $('playButton').title = 'Reproduzir';
+    setPlayIcon($('playButton'), false); setPlayIcon($('lyricsPlay'), false);
     $('likeButton').classList.remove('active'); $('likeButton').setAttribute('aria-pressed', 'false');
     syncTransportStates(); updateMediaSession(); return;
   }
@@ -397,8 +413,6 @@ function renderCurrentTrack() {
   const liked = safeArray('favorites').includes(currentTrack.id);
   $('likeButton').textContent = liked ? '♥' : '♡';
   $('likeButton').classList.toggle('active', liked); $('likeButton').setAttribute('aria-pressed', String(liked));
-  $('playButton').textContent = audio.paused ? '▶' : 'Ⅱ';
-  $('playButton').title = audio.paused ? 'Reproduzir' : 'Pausar';
   syncTransportStates();
   updateMediaSession();
 }
@@ -409,8 +423,8 @@ function updateCrossfadeVolumes(progress) {
 }
 function cancelCrossfade() {
   const rollback = crossfadeActive;
-  if (crossfadeFrame) cancelAnimationFrame(crossfadeFrame);
-  crossfadeFrame = 0; crossfadeProgress = 0; crossfadeActive = false;
+  if (crossfadeTimer) clearInterval(crossfadeTimer);
+  crossfadeTimer = 0; crossfadeProgress = 0; crossfadeActive = false;
   standbyAudio.pause(); standbyAudio.removeAttribute('src'); standbyAudio.load(); standbyAudio.volume = 0;
   audio.volume = baseVolume;
   if (rollback) { currentTrack = crossfadeFromTrack; queueIndex = crossfadeFromIndex; }
@@ -434,16 +448,16 @@ function beginCrossfade() {
   incoming.play().then(() => {
     if (!crossfadeActive) return;
     const startedAt = performance.now(); const durationMs = duration * 1000;
-    const step = now => {
+    const step = () => {
       if (!crossfadeActive) return;
-      crossfadeProgress = Math.min(1, (now - startedAt) / durationMs); updateCrossfadeVolumes(crossfadeProgress);
-      if (crossfadeProgress < 1) { crossfadeFrame = requestAnimationFrame(step); return; }
-      crossfadeFrame = 0; outgoing.pause(); outgoing.removeAttribute('src'); outgoing.load();
+      crossfadeProgress = Math.min(1, (performance.now() - startedAt) / durationMs); updateCrossfadeVolumes(crossfadeProgress);
+      if (crossfadeProgress < 1) return;
+      clearInterval(crossfadeTimer); crossfadeTimer = 0; outgoing.pause(); outgoing.removeAttribute('src'); outgoing.load();
       audio = incoming; standbyAudio = outgoing; audio.volume = baseVolume; standbyAudio.volume = 0;
       crossfadeActive = false; crossfadeProgress = 0; crossfadeFromTrack = null; crossfadeFromIndex = -1; renderCurrentTrack(); updateTimeline();
       if (audio.ended) nextTrack();
     };
-    crossfadeFrame = requestAnimationFrame(step);
+    crossfadeTimer = setInterval(step, 40); step();
   }).catch(() => {
     cancelCrossfade(); currentTrack = outgoingTrack; queueIndex = outgoingIndex; renderCurrentTrack();
     toast('Não foi possível misturar esta faixa; a reprodução continua normalmente.');
@@ -455,7 +469,7 @@ function updateMediaSession() {
   if (!session) return;
   try {
     if (currentTrack && typeof MediaMetadata !== 'undefined') {
-      session.metadata = new MediaMetadata({ title: currentTrack.title, artist: currentTrack.artist, album: currentTrack.album, artwork: currentTrack.coverUrl ? [{ src: currentTrack.coverUrl, sizes: '512x512' }] : [] });
+      session.metadata = new MediaMetadata({ title: currentTrack.title, artist: currentTrack.artist, album: currentTrack.album, artwork: [{ src: currentTrack.coverUrl || 'build/icons/512x512.png', sizes: '512x512', type: 'image/png' }] });
     } else session.metadata = null;
     session.playbackState = currentTrack ? (audio.paused ? 'paused' : 'playing') : 'none';
     if (Number.isFinite(audio.duration) && audio.duration > 0 && typeof session.setPositionState === 'function') session.setPositionState({ duration: audio.duration, playbackRate: audio.playbackRate || 1, position: Math.min(audio.currentTime || 0, audio.duration) });

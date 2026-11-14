@@ -24,11 +24,14 @@ npm start
 Na primeira execução, escolha uma pasta com seus arquivos. O app acompanha mudanças e atualiza a biblioteca. Use **Biblioteca e ajustes → Adicionar pasta** para incluir mais pastas.
 Depois que uma pasta for selecionada, o painel de boas-vindas some; o cartão da biblioteca e **Biblioteca e ajustes** abrem o gerenciamento de pastas.
 
-Para criar o instalador Ubuntu `.deb`:
+Para criar os pacotes de teste:
 
 ```bash
-npm run build:ubuntu
+npm run build:debian
+npm run build:arch
 ```
+
+O `.deb` pode ser instalado em Debian e Ubuntu com `sudo apt install ./Isotopus-0.1.5-amd64.deb`. O pacote Arch (`.pacman`) pode ser instalado com `sudo pacman -U ./Isotopus-0.1.5-*.pacman`.
 
 ## Controles
 

@@ -1,0 +1,30 @@
+.recent-section{margin-top:30px}
+.recent-section .section-heading{margin-bottom:15px}
+.recent-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+.recent-grid .result-card{padding:9px;border-radius:14px;transition:transform .22s cubic-bezier(.2,1.25,.35,1),box-shadow .2s,border-color .2s}
+.recent-grid .result-card:hover{transform:translateY(-3px);box-shadow:0 9px 22px #5c52591c}
+.recent-grid .result-art{margin-bottom:9px;border-radius:10px}
+.recent-grid .result-card.playing-card{border-color:#a3c9a7;box-shadow:inset 0 0 0 1px #a3c9a755}
+.recent-grid .result-card .result-copy b{font-size:10px;line-height:1.4}
+.home-empty{grid-column:1/-1;min-height:110px;display:flex;align-items:center;gap:14px;padding:19px;border:1px dashed #c9b6a2;border-radius:15px;background:#f4e7d6}
+.home-empty-mark{width:46px;height:46px;display:grid;place-items:center;flex:none;border-radius:13px;background:#dce8d6;color:#52745a;font-size:21px}
+.home-empty>div{min-width:0;flex:1}
+.home-empty b,.home-empty small{display:block}
+.home-empty b{color:#5c5259;font:600 12px Manrope, sans-serif}
+.home-empty small{margin-top:5px;color:#817780;font-size:10px}
+.home-empty .secondary-button{white-space:nowrap}
+.skip-button svg,.play-button svg{width:17px;height:17px;display:block;fill:currentColor}
+.skip-button svg{width:16px;height:16px}
+.play-button{padding:0!important}
+.play-button svg{width:18px;height:18px}
+.play-button.active svg{width:17px;height:17px}
+.transport-button.skip-button{color:#5c5259}
+.transport-button.skip-button:hover{color:#e76847}
+.lyrics-transport .skip-button svg{width:17px;height:17px}
+body.dark-theme .home-empty{background:#29231c;border-color:#514638}
+body.dark-theme .home-empty b{color:#eddbc4}
+body.dark-theme .home-empty small{color:#b0a493}
+body.dark-theme .transport-button.skip-button{color:#d4c7b5}
+@media(max-width:1250px){.recent-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:850px){.recent-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:550px){.recent-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.home-empty{align-items:flex-start;flex-wrap:wrap}.home-empty>div{min-width:calc(100% - 65px)}}

@@ -85,7 +85,8 @@ function createWindow(port) {
     height: Math.min(1000, Math.max(minHeight, Math.floor(workHeight * .92))),
     minWidth, minHeight,
     backgroundColor: '#eddbc4', title: 'Isótopus',
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: true }
+    // Keep audio events, Media Session updates, and crossfade timing active while minimized.
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false }
   });
   win.loadURL(`http://127.0.0.1:${port}`);
   win.setMenuBarVisibility(false);
