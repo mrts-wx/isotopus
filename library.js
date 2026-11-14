@@ -63,6 +63,7 @@ async function parseTrack(file, stat, parseFile) {
 function createLibrary(cacheDirectory) {
   const cache = new Map();
   const assets = new Map();
+  const trackPaths = new Map();
   let cachedParser;
   let loaded = false;
   async function loadCache() {
@@ -73,6 +74,7 @@ function createLibrary(cacheDirectory) {
       const records = JSON.parse(await fs.readFile(path.join(cacheDirectory, 'index.json'), 'utf8'));
       for (const [file, record] of records) {
         cache.set(file, record);
+        trackPaths.set(record.track.id, file);
         if (record.track.coverId) {
           try { assets.set(record.track.coverId, { buffer: await fs.readFile(path.join(cacheDirectory, `${record.track.coverId}.cover`)), contentType: record.track.coverType || 'image/jpeg' }); } catch {}
         }
@@ -93,7 +95,7 @@ function createLibrary(cacheDirectory) {
     const files = await findAudioFiles(folders);
     const present = new Set(files);
     for (const [file, record] of cache) {
-      if (!present.has(file)) { cache.delete(file); assets.delete(`a${record.track.id}`); }
+      if (!present.has(file)) { cache.delete(file); trackPaths.delete(record.track.id); assets.delete(`a${record.track.id}`); }
     }
     const tracks = new Array(files.length);
     let cursor = 0;
@@ -107,6 +109,7 @@ function createLibrary(cacheDirectory) {
           let track = cache.get(file)?.signature === signature ? cache.get(file).track : await parseTrack(file, stat, parseFile);
           const audioId = `a${track.id}`;
           assets.set(audioId, { path: file });
+          trackPaths.set(track.id, file);
           if (track.coverBuffer) {
             assets.set(track.coverId, { buffer: track.coverBuffer, contentType: track.coverType });
             if (cacheDirectory) await fs.writeFile(path.join(cacheDirectory, `${track.coverId}.cover`), track.coverBuffer).catch(() => {});
@@ -126,7 +129,7 @@ function createLibrary(cacheDirectory) {
     await saveCache().catch(() => {});
     return tracks.filter(Boolean).sort((a, b) => a.artist.localeCompare(b.artist) || a.album.localeCompare(b.album) || a.title.localeCompare(b.title));
   }
-  return { scan, resolveAsset: id => assets.get(id) || null, clear: () => { cache.clear(); assets.clear(); loaded = true; } };
+  return { scan, resolveAsset: id => assets.get(id) || null, resolveTrackPath: id => trackPaths.get(id) || null, clear: () => { cache.clear(); assets.clear(); trackPaths.clear(); loaded = true; } };
 }
 
 module.exports = { AUDIO_EXTENSIONS, createLibrary, findAudioFiles, isLossless, parseTrack };

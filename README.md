@@ -31,6 +31,7 @@ Opcionalmente, informe o Application ID de uma aplicação Discord nas configura
 ## Controles
 
 O Isótopus salva volume, aleatório e repetição. Os controles de mídia do desktop são integrados quando disponíveis. Atalhos: `Espaço` reproduz/pausa, `←/→` busca 5 segundos, `Shift + ←/→` troca de faixa, `↑/↓` ajusta o volume e `Ctrl + K` foca a busca. Coleções grandes carregam em blocos para manter a interface leve.
+Na página da fila, exporte a seleção atual como `.m3u8` para usar em outros players. A busca ignora acentos, então “João” também encontra “Joao”.
 
 ## Verificação
 

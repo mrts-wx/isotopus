@@ -20,6 +20,7 @@ let searchTimer;
 const PAGE_SIZE = 120;
 const titles = { listen: 'Ouvir agora', songs: 'Faixas', albums: 'Álbuns', artists: 'Artistas', favorites: 'Favoritas', recent: 'Tocadas recentemente', folders: 'Pastas' };
 const safeArray = key => { try { return JSON.parse(store.get(key) || '[]'); } catch { return []; } };
+const normalizeSearch = value => String(value || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('pt-BR').trim();
 
 function toast(message) {
   const el = $('toast'); el.textContent = message; el.classList.add('show');
@@ -192,7 +193,7 @@ function openView(view, setSelected = true) {
     const recent = safeArray('recentIds').map(id => tracks.find(track => track.id === id)).filter(Boolean);
     renderCards(recent, 'As faixas tocadas aparecerão aqui.'); return;
   }
-  if (view === 'queue') { renderCards(queue, 'Adicione uma faixa à fila.', 'queue'); return; }
+  if (view === 'queue') { renderCards(queue, 'Adicione uma faixa à fila.', 'queue'); renderQueueActions(); return; }
   renderCards(tracks, folders.length ? 'Adicione músicas às pastas monitoradas.' : 'Escolha uma pasta com arquivos de áudio.');
 }
 function searchLibrary(query) {
@@ -200,8 +201,8 @@ function searchLibrary(query) {
   $('quickSection').hidden = true; $('catalogSection').hidden = true;
   $('pageTitle').innerHTML = 'Resultados<span class="gold-dot">.</span>';
   $('pageSubtitle').textContent = `Busca local por “${query}”`;
-  const lower = query.toLocaleLowerCase('pt-BR');
-  const results = tracks.filter(track => `${track.title} ${track.artist} ${track.album} ${track.codec} ${track.genre}`.toLocaleLowerCase('pt-BR').includes(lower));
+  const lower = normalizeSearch(query);
+  const results = tracks.filter(track => normalizeSearch(`${track.title} ${track.artist} ${track.album} ${track.codec} ${track.genre}`).includes(lower));
   renderCards(results, 'Nenhuma faixa corresponde à busca.');
 }
 function presenceSignature(track, playing) { return `${track?.id || ''}|${playing}`; }
@@ -334,6 +335,26 @@ function showQueue() {
   $('pageTitle').innerHTML = 'Fila<span class="gold-dot">.</span>';
   $('pageSubtitle').textContent = `${queue.length} faixas na fila de reprodução.`;
   renderCards(queue, 'Selecione uma faixa para montar a fila.', 'queue');
+  renderQueueActions();
+}
+function renderQueueActions() {
+  if (!queue.length) return;
+  const results = $('dynamicResults');
+  if (!results) return;
+  const toolbar = document.createElement('div'); toolbar.className = 'queue-toolbar';
+  const label = document.createElement('span'); label.textContent = `${queue.length} faixas · exporte para ouvir em outro player`;
+  const exportButton = document.createElement('button'); exportButton.type = 'button'; exportButton.className = 'secondary-button'; exportButton.textContent = 'Exportar M3U8';
+  exportButton.addEventListener('click', async () => {
+    exportButton.disabled = true;
+    try {
+      const result = await window.isotopus.exportPlaylist(queue.map(({ id, title, artist, duration }) => ({ id, title, artist, duration })));
+      if (result?.cancelled) return;
+      if (!result?.ok) { toast(result?.error || 'Não foi possível exportar a fila.'); return; }
+      toast(`Playlist M3U8 salva · ${result.count} faixas.`);
+    } catch (error) { toast(`Falha ao exportar: ${error.message}`); }
+    finally { exportButton.disabled = false; }
+  });
+  toolbar.append(label, exportButton); results.prepend(toolbar);
 }
 $('queueButton').addEventListener('click', showQueue); $('playerQueue').addEventListener('click', showQueue);
 $('saveSettings').addEventListener('click', async () => {

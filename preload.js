@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('isotopus', {
   removeMusicFolder: folder => ipcRenderer.invoke('library:removeFolder', folder),
   rescanLibrary: () => ipcRenderer.invoke('library:rescan'),
   mediaUrl: id => ipcRenderer.invoke('library:mediaUrl', id),
+  exportPlaylist: tracks => ipcRenderer.invoke('playlist:export', tracks),
   onLibraryUpdated: callback => {
     const listener = (_event, data) => callback(data);
     ipcRenderer.on('library:updated', listener);
