@@ -1,6 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { repairFlacPictureMime } = require('./flac');
 
 const AUDIO_EXTENSIONS = new Set(['.flac', '.wav', '.wave', '.aif', '.aiff', '.m4a', '.mp3', '.aac', '.ogg', '.oga', '.opus']);
 const idFor = value => crypto.createHash('sha256').update(value).digest('hex').slice(0, 24);
@@ -95,7 +96,10 @@ function createLibrary(cacheDirectory) {
     const files = await findAudioFiles(folders);
     const present = new Set(files);
     for (const [file, record] of cache) {
-      if (!present.has(file)) { cache.delete(file); trackPaths.delete(record.track.id); assets.delete(`a${record.track.id}`); }
+      if (!present.has(file)) {
+        cache.delete(file); trackPaths.delete(record.track.id); assets.delete(`a${record.track.id}`);
+        if (record.playbackPath) fs.rm(record.playbackPath, { force: true }).catch(() => {});
+      }
     }
     const tracks = new Array(files.length);
     let cursor = 0;
@@ -106,9 +110,21 @@ function createLibrary(cacheDirectory) {
         try {
           const stat = await fs.stat(file);
           const signature = `${stat.size}:${stat.mtimeMs}`;
-          let track = cache.get(file)?.signature === signature ? cache.get(file).track : await parseTrack(file, stat, parseFile);
+          const prior = cache.get(file);
+          let track = prior?.signature === signature ? prior.track : await parseTrack(file, stat, parseFile);
+          let playbackPath = prior?.signature === signature ? prior.playbackPath || '' : '';
+          if (playbackPath) {
+            try { await fs.access(playbackPath); } catch { playbackPath = ''; }
+          }
+          if (!playbackPath && track.coverId) {
+            playbackPath = await repairFlacPictureMime(file, cacheDirectory, track.id, signature)
+              .catch(error => { console.warn(`Could not normalize FLAC picture metadata for ${path.basename(file)}:`, error.message); return ''; });
+          }
+          if (prior?.playbackPath && prior.signature !== signature && prior.playbackPath !== playbackPath) {
+            fs.rm(prior.playbackPath, { force: true }).catch(() => {});
+          }
           const audioId = `a${track.id}`;
-          assets.set(audioId, { path: file });
+          assets.set(audioId, { path: playbackPath || file });
           trackPaths.set(track.id, file);
           if (track.coverBuffer) {
             assets.set(track.coverId, { buffer: track.coverBuffer, contentType: track.coverType });
@@ -118,7 +134,7 @@ function createLibrary(cacheDirectory) {
           }
           track.streamUrl = `${origin}/media/${audioId}`;
           track.coverUrl = track.coverId ? `${origin}/media/${track.coverId}` : '';
-          cache.set(file, { signature, track });
+          cache.set(file, { signature, track, playbackPath });
           tracks[index] = track;
         } catch { tracks[index] = null; }
       }

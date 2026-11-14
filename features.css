@@ -42,7 +42,9 @@ body.dark-theme .lyrics-header{border-color:#443a2e}
 body.dark-theme .lyrics-menu-button,body.dark-theme .lyrics-minimize{background:#30271d;border-color:#51422e;color:#eddbc4}
 body.dark-theme .lyrics-menu button:hover,body.dark-theme .queue-popover-row:hover,body.dark-theme .queue-popover-row.current{background:#3a3024}
 body.dark-theme .lyrics-line{color:#b0a493}
-body.dark-theme .lyrics-line.active{color:#f2e4cb;background:#a3c9a71c}
+body.dark-theme .lyrics-line.active{color:#f2e4cb;background:transparent;text-shadow:0 0 18px #ff6e4a70,0 0 4px #ffb35377}
+body.dark-theme .lyrics-line.lyrics-neighbor{color:#c5b9a6}
+body.dark-theme .lyrics-line:focus-visible{color:#fff4e2;text-shadow:0 0 18px #ff6e4a88,0 0 5px #ffb353aa}
 body.dark-theme .transport-button{color:#c5b9a6}
 body.dark-theme .transport-button:hover,body.dark-theme .queue-toggle:hover,body.dark-theme .queue-toggle[aria-expanded="true"]{background:#3a3024;color:#a3c9a7}
 body.dark-theme .lyrics-offset-controls button,body.dark-theme .secondary-button{background:#3a3024;border-color:#51422e;color:#eddbc4}

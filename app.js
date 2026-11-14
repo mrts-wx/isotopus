@@ -121,6 +121,7 @@ function renderHome() {
   const newest = [...tracks].sort((a, b) => b.modified - a.modified).slice(0, 6);
   const items = recents.length ? recents : newest;
   const grid = $('recentGrid'); grid.replaceChildren();
+  renderLosslessHome();
   $('recentHeading').textContent = recents.length ? 'Tocadas recentemente' : 'Adicionadas recentemente';
   $('viewRecent').hidden = !recents.length;
   if (!items.length) {
@@ -129,6 +130,13 @@ function renderHome() {
     const button = document.createElement('button'); button.className = 'secondary-button'; button.textContent = 'Escolher pasta'; button.addEventListener('click', chooseFolders); empty.append(button); grid.append(empty); return;
   }
   items.forEach(track => grid.append(createTrackCard(track, items, 'track')));
+}
+function renderLosslessHome() {
+  const grid = $('losslessGrid'); grid.replaceChildren();
+  const flacTracks = tracks.filter(track => /FLAC/i.test(track.codec || ''));
+  $('losslessEmpty').hidden = flacTracks.length > 0;
+  if (!flacTracks.length) return;
+  flacTracks.slice(0, 6).forEach(track => grid.append(createTrackCard(track, flacTracks, 'track')));
 }
 function groupsForAlbums(items) {
   const groups = new Map();
@@ -163,7 +171,7 @@ function createTrackCard(item, items, kind) {
   const title = document.createElement('b'); title.textContent = item.title;
   const subtitle = document.createElement('small'); subtitle.textContent = item.artist || item.album || '';
   copy.append(title, subtitle);
-  if (kind === 'track') {
+  if (kind === 'track' || kind === 'playlist-track') {
     const meta = document.createElement('span'); meta.className = 'track-info';
     const quality = document.createElement('span'); quality.className = `quality-badge${item.lossless ? '' : ' compressed'}`; quality.textContent = item.lossless ? 'LOSSLESS' : 'COMPRESSED';
     const duration = document.createElement('small'); duration.textContent = fmt(item.duration);
@@ -180,8 +188,8 @@ function createTrackCard(item, items, kind) {
     else playTrack(item, items);
   });
   card.append(main);
-  if (kind === 'track' && item.id) {
-    const inPlaylist = activeView.startsWith('playlist:');
+  if ((kind === 'track' || kind === 'playlist-track') && item.id) {
+    const inPlaylist = kind === 'playlist-track' || activeView.startsWith('playlist:');
     const action = document.createElement('button'); action.type = 'button'; action.className = `playlist-add${inPlaylist ? ' remove-from-playlist' : ''}`; action.textContent = inPlaylist ? '−' : '＋';
     action.title = inPlaylist ? 'Remover desta playlist' : 'Adicionar a uma playlist';
     action.setAttribute('aria-label', `${inPlaylist ? 'Remover' : 'Adicionar'} ${item.title} ${inPlaylist ? 'desta' : 'a uma'} playlist`);
@@ -212,7 +220,7 @@ function renderCards(items, emptyMessage, kind = 'track') {
   results.append(grid);
   installDockMagnification(grid);
   const playlistTracks = collectTracks(items);
-  if (playlistTracks.length && kind !== 'queue' && kind !== 'playlist' && activeView !== 'folders') {
+  if (playlistTracks.length && kind === 'track' && activeView !== 'folders') {
     const toolbar = document.createElement('div'); toolbar.className = 'queue-toolbar playlist-create-toolbar';
     const label = document.createElement('span'); label.textContent = `${playlistTracks.length} faixas nesta seleção`;
     const create = document.createElement('button'); create.type = 'button'; create.className = 'secondary-button'; create.textContent = 'Criar playlist';
@@ -305,6 +313,19 @@ function renderPlaylistCollection() {
   create.addEventListener('click', () => openPlaylistDialog());
   toolbar.append(label, create); results.prepend(toolbar);
 }
+function renderPlaylistPlaybackControls(items) {
+  if (!items.length) return;
+  const results = $('dynamicResults');
+  if (!results) return;
+  const toolbar = document.createElement('div'); toolbar.className = 'queue-toolbar playlist-playback-toolbar';
+  const label = document.createElement('span'); label.textContent = `${items.length} faixas nesta playlist`;
+  const actions = document.createElement('div'); actions.className = 'playlist-playback-actions';
+  const play = document.createElement('button'); play.type = 'button'; play.className = 'primary-button'; play.textContent = '▶  Reproduzir';
+  play.addEventListener('click', () => playCollection(items, { shuffle: false }));
+  const random = document.createElement('button'); random.type = 'button'; random.className = 'secondary-button'; random.textContent = '⤨  Aleatório';
+  random.addEventListener('click', () => playCollection(items, { shuffle: true }));
+  actions.append(play, random); toolbar.append(label, actions); results.prepend(toolbar);
+}
 function removeDynamic() { $('dynamicResults')?.remove(); }
 function setPageHeading(view) {
   const playlist = view.startsWith('playlist:') ? playlists.find(item => item.id === view.slice('playlist:'.length)) : null;
@@ -331,7 +352,9 @@ function openView(view, setSelected = true) {
   if (view.startsWith('playlist:')) {
     const playlist = playlists.find(item => item.id === view.slice('playlist:'.length));
     if (!playlist) { openView('playlists'); return; }
-    renderCards(playlistTracks(playlist), 'Adicione músicas usando o botão + em qualquer faixa.', 'track'); return;
+    const items = playlistTracks(playlist);
+    renderCards(items, 'Adicione músicas usando o botão + em qualquer faixa.', 'playlist-track');
+    renderPlaylistPlaybackControls(items); return;
   }
   if (view === 'favorites') {
     const ids = new Set(safeArray('favorites'));
@@ -496,9 +519,11 @@ async function playTrack(track, list = tracks, { keepQueue = false } = {}) {
     rememberTrack(track); renderCurrentTrack();
   } catch (error) { toast(`Não foi possível reproduzir ${track.codec}: ${error.message}`); }
 }
-function playCollection(items) {
+function playCollection(items, { shuffle = shuffled } = {}) {
   if (!items?.length) return;
-  queue = items; queueIndex = 0; renderQueuePopover(); playTrack(queue[0], queue);
+  queue = shuffle ? shuffleTracks(items) : items.slice();
+  if (shuffle) { shuffled = true; store.set('shuffle', 'yes'); syncTransportStates(); }
+  queueIndex = 0; renderQueuePopover(); playTrack(queue[0], queue, { keepQueue: true });
 }
 async function nextTrack() {
   if (!queue.length) return;
@@ -601,7 +626,13 @@ function updateLyricsHighlight(forceScroll = false) {
   let next = -1;
   for (let i = 0; i < currentLyrics.lines.length; i++) if (currentLyrics.lines[i].time != null && currentLyrics.lines[i].time <= position) next = i;
   if (next < 0) next = currentLyrics.lines.findIndex(line => line.time != null);
-  $('lyricsLines').querySelectorAll('.lyrics-line').forEach((row, index) => row.classList.toggle('active', index === next));
+  const rows = $('lyricsLines').querySelectorAll('.lyrics-line');
+  rows.forEach(row => row.classList.remove('active', 'lyrics-neighbor'));
+  if (next >= 0) {
+    rows[next]?.classList.add('active');
+    rows[next - 1]?.classList.add('lyrics-neighbor');
+    rows[next + 1]?.classList.add('lyrics-neighbor');
+  }
   if (next >= 0 && (forceScroll || next !== activeLyricIndex)) $('lyricsLines').children[next]?.scrollIntoView({ block: 'center', behavior: forceScroll ? 'auto' : 'smooth' });
   activeLyricIndex = next;
 }
@@ -728,9 +759,7 @@ $('accountButton').addEventListener('click', () => folders.length ? showSettings
 $('settingsButton').addEventListener('click', showSettings);
 $('learnButton').addEventListener('click', () => $('infoDialog').showModal()); $('infoDone').addEventListener('click', () => $('infoDialog').close());
 $('viewLibrary').addEventListener('click', () => openView('songs'));
-$('rescanButton').addEventListener('click', async () => { toast('Verificando as pastas…'); applyLibrary(await window.isotopus.rescanLibrary()); });
 $('rescanLibrary').addEventListener('click', async () => { applyLibrary(await window.isotopus.rescanLibrary()); toast(`${tracks.length} faixas verificadas.`); });
-$('backButton').addEventListener('click', () => openView('listen')); $('forwardButton').addEventListener('click', () => toast('Selecione uma seção da biblioteca.'));
 $('searchInput').addEventListener('input', event => { clearTimeout(searchTimer); const value = event.currentTarget.value; searchTimer = setTimeout(() => value.trim() ? searchLibrary(value.trim()) : openView(activeView), 120); });
 document.addEventListener('keydown', event => {
   const target = event.target;
