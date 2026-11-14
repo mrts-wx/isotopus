@@ -80,3 +80,30 @@ body.dark-theme .playlist-playback-toolbar{background:linear-gradient(130deg,#29
 @media(max-width:850px){.lossless-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.playlist-playback-toolbar{align-items:flex-start;flex-direction:column}}
 @media(max-width:600px){.lossless-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.playlist-playback-actions{width:100%}.playlist-playback-actions button{flex:1;min-width:0}.topbar{padding-inline:16px}}
 @media(prefers-reduced-motion:reduce){.recent-grid .result-card{animation:none}}
+/* 0.1.8 preference controls: restrained depth, clear focus, and compact EQ layout. */
+.setting-select{min-width:164px;height:38px;padding:0 34px 0 12px;border:1px solid #d9c4ac;border-radius:11px;background:linear-gradient(180deg,#fff8ef,#f1e3d2);color:#5c5259;box-shadow:0 2px 5px #5c52590d,inset 0 1px #ffffffa6;outline:none;cursor:pointer}
+.setting-select:focus-visible,.eq-band input:focus-visible{outline:2px solid #8db99a;outline-offset:2px}
+.equalizer-panel{margin-top:16px;padding:16px;border:1px solid #d9c4ac;border-radius:16px;background:linear-gradient(145deg,#f8edde,#f1e3d2);box-shadow:0 8px 24px #5c52590c,inset 0 1px #ffffffaa}
+.equalizer-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.equalizer-heading b,.equalizer-heading small{display:block}
+.equalizer-heading b{font-size:13px;color:#5c5259}
+.equalizer-heading small{margin-top:4px;color:#817780;font-size:10px}
+.equalizer-options{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:14px 0 9px;color:#756c73;font-size:11px}
+.equalizer-options .setting-select{height:34px;min-width:138px}
+.equalizer-bands{display:grid;grid-template-columns:repeat(10,minmax(28px,1fr));gap:5px;padding-top:7px;border-top:1px solid #d9c4ac}
+.eq-band{min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:7px 2px;border-radius:9px;transition:background .2s ease}
+.eq-band:hover{background:#ffffff70}
+.eq-band span{font-size:9px;font-variant-numeric:tabular-nums;color:#756c73}
+.eq-band input{width:clamp(74px,8vw,112px);height:18px;margin:29px 0;accent-color:#ff6e4a;transform:rotate(-90deg);cursor:pointer}
+.eq-band small{margin-top:-25px;color:#817780;font-size:8px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.equalizer-panel:has(#equalizerEnabled:not(:checked)) .equalizer-bands{opacity:.48}
+.setting-row .setting-select{flex:0 0 auto}
+.dialog-content{scrollbar-color:#c9b6a2 transparent}
+body.dark-theme .setting-select,body.dark-theme .equalizer-panel{background:linear-gradient(145deg,#302920,#27221b);border-color:#514638;color:#eddbc4;box-shadow:0 8px 24px #0003,inset 0 1px #ffffff0a}
+body.dark-theme .equalizer-heading b{color:#eddbc4}
+body.dark-theme .equalizer-heading small,body.dark-theme .equalizer-options,body.dark-theme .eq-band span{color:#b0a493}
+body.dark-theme .equalizer-bands{border-color:#514638}
+body.dark-theme .eq-band:hover{background:#ffffff0a}
+body.dark-theme .setting-select option{background:#29231c;color:#eddbc4}
+@media(max-width:560px){.equalizer-panel{padding:12px 9px}.equalizer-bands{grid-template-columns:repeat(5,minmax(42px,1fr));row-gap:0}.eq-band input{width:76px;margin:24px 0}.eq-band small{margin-top:-20px}.setting-row .setting-select{min-width:132px}}
+@media(prefers-reduced-motion:reduce){.eq-band{transition:none}}
