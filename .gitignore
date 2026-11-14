@@ -3,6 +3,8 @@ node_modules/
 dist/
 out/
 work/
+__pycache__/
+*.py[cod]
 
 # Binary releases are uploaded as GitHub Release assets, not committed to Git
 release-assets/

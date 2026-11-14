@@ -1,6 +1,6 @@
 {
   "name": "isotopus",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "private": true,
   "author": {
     "name": "Local Build",
@@ -11,8 +11,85 @@
   "description": "Player de música local para Ubuntu com playlists e letras sincronizadas",
   "license": "UNLICENSED",
   "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "build:ubuntu": "electron-builder --linux deb",
+    "build:debian": "electron-builder --linux deb",
+    "build:arch": "electron-builder --linux pacman",
+    "build:windows": "electron-builder --win nsis"
+  },
   "dependencies": {
     "music-metadata": "^11.13.0"
+  },
+  "devDependencies": {
+    "electron": "^45.3.2",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.isotopus.musicplayer",
+    "productName": "Isótopus",
+    "files": [
+      "main.js",
+      "preload.js",
+      "server.js",
+      "flac.js",
+      "library.js",
+      "playlist.js",
+      "shuffle.js",
+      "lyrics.js",
+      "index.html",
+      "app.js",
+      "styles.css",
+      "theme.css",
+      "motion.css",
+      "local.css",
+      "polish.css",
+      "clarity.css",
+      "lyrics.css",
+      "features.css",
+      "home-player.css",
+      "no-cover.svg",
+      "build/icons/**",
+      "README.md",
+      "package.json",
+      "node_modules/**"
+    ],
+    "linux": {
+      "target": [
+        "deb"
+      ],
+      "category": "AudioVideo",
+      "icon": "build/icons",
+      "syncDesktopName": true,
+      "artifactName": "Isotopus-${version}-${arch}.${ext}"
+    },
+    "win": {
+      "target": ["nsis"],
+      "icon": "build/icons/isotopus.ico",
+      "artifactName": "Isotopus-${version}-setup-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Isótopus"
+    },
+    "deb": {
+      "packageCategory": "sound",
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0"
+      ]
+    }
   },
   "allowScripts": {
     "electron@45.3.2": true

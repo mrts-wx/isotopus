@@ -10,6 +10,7 @@ let standbyAudio = new Audio();
 standbyAudio.preload = 'metadata'; standbyAudio.volume = 0;
 const EQ_FREQUENCIES = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
 const EQ_PRESETS = { flat: [0,0,0,0,0,0,0,0,0,0], rock: [5,4,3,1,-1,-1,2,3,4,5], pop: [-1,1,3,4,2,0,-1,-1,1,2], jazz: [3,2,1,2,-1,-1,0,1,2,3], classical: [4,3,2,1,-1,-1,0,2,3,4], electronic: [5,4,1,-1,-2,1,2,1,3,4], vocal: [-2,-1,0,2,4,4,3,1,0,-1] };
+const EQ_LABELS = { flat: 'Flat', rock: 'Rock', pop: 'Pop', jazz: 'Jazz', classical: 'Clássico', electronic: 'Eletrônico', vocal: 'Voz', custom: 'Personalizado' };
 let equalizerState = { enabled: store.get('equalizerEnabled') !== 'no', preset: 'flat', values: [...EQ_PRESETS.flat] };
 try { const saved = JSON.parse(store.get('equalizer') || 'null'); if (saved && Array.isArray(saved.values) && saved.values.length === EQ_FREQUENCIES.length) equalizerState = { enabled: store.get('equalizerEnabled') !== 'no', preset: saved.preset || 'custom', values: saved.values.map(value => Math.max(-12, Math.min(12, Number(value) || 0))) }; } catch {}
 let audioContext = null;
@@ -86,10 +87,59 @@ function renderEqualizer() {
   EQ_FREQUENCIES.forEach((frequency, index) => {
     const label = document.createElement('label'); label.className = 'eq-band'; label.htmlFor = `eqBand${index}`;
     const name = document.createElement('span'); name.textContent = frequency >= 1000 ? `${frequency / 1000}k` : String(frequency);
-    const slider = document.createElement('input'); slider.type = 'range'; slider.id = `eqBand${index}`; slider.min = '-12'; slider.max = '12'; slider.step = '1'; slider.value = String(equalizerState.values[index]); slider.setAttribute('aria-label', `${frequency} Hz`);
+    const slider = document.createElement('input'); slider.type = 'range'; slider.id = `eqBand${index}`; slider.min = '-12'; slider.max = '12'; slider.step = '0.5'; slider.value = String(equalizerState.values[index]); slider.setAttribute('aria-label', `${frequency} Hz`);
     const value = document.createElement('small'); value.textContent = `${equalizerState.values[index] > 0 ? '+' : ''}${equalizerState.values[index]} dB`;
-    slider.addEventListener('input', () => { equalizerState.values[index] = Number(slider.value); equalizerState.preset = 'custom'; $('equalizerPreset').value = 'custom'; value.textContent = `${Number(slider.value) > 0 ? '+' : ''}${slider.value} dB`; applyEqualizer(); saveEqualizer(); });
-    label.append(name, slider, value); container.append(label);
+    slider.addEventListener('input', () => {
+      const nextValue = Number.parseFloat(slider.value);
+      if (!Number.isFinite(nextValue)) return;
+      equalizerState.values[index] = Math.max(-12, Math.min(12, nextValue));
+      equalizerState.preset = 'custom'; setStyledSelect('equalizerPreset', 'custom');
+      value.textContent = `${nextValue > 0 ? '+' : ''}${nextValue} dB`;
+      updateEqualizerSummary(); applyEqualizer(); saveEqualizer();
+    });
+    const control = document.createElement('div'); control.className = 'eq-band-control'; control.append(slider);
+    label.append(name, control, value); container.append(label);
+  });
+}
+function updateEqualizerSummary() {
+  const summary = $('equalizerSummary');
+  if (summary) summary.textContent = `${equalizerState.enabled ? 'Equalizador ativado' : 'Equalizador desativado'} · ${EQ_LABELS[equalizerState.preset] || EQ_LABELS.custom}`;
+}
+function setStyledSelect(id, value) {
+  const root = $(id); if (!root) return;
+  const option = root.querySelector(`[data-option="${value}"]`);
+  if (!option) return;
+  root.dataset.value = value;
+  root.querySelector('.styled-select-trigger span').textContent = option.textContent;
+  root.querySelectorAll('[role="option"]').forEach(item => item.setAttribute('aria-selected', String(item === option)));
+  root.classList.remove('open');
+  root.querySelector('.styled-select-trigger').setAttribute('aria-expanded', 'false');
+  root.querySelector('.styled-select-menu').hidden = true;
+}
+function bindStyledSelect(id, onChange) {
+  const root = $(id); if (!root) return;
+  const trigger = root.querySelector('.styled-select-trigger');
+  const menu = root.querySelector('.styled-select-menu');
+  const close = () => { root.classList.remove('open'); trigger.setAttribute('aria-expanded', 'false'); menu.hidden = true; };
+  const open = () => { document.querySelectorAll('.styled-select.open').forEach(item => { item.classList.remove('open'); item.querySelector('.styled-select-trigger').setAttribute('aria-expanded', 'false'); item.querySelector('.styled-select-menu').hidden = true; }); root.classList.add('open'); trigger.setAttribute('aria-expanded', 'true'); menu.hidden = false; menu.querySelector('[aria-selected="true"]')?.focus(); };
+  trigger.addEventListener('click', () => menu.hidden ? open() : close());
+  root.addEventListener('click', event => {
+    const option = event.target.closest('[data-option]'); if (!option) return;
+    setStyledSelect(id, option.dataset.option); onChange(option.dataset.option);
+  });
+  trigger.addEventListener('keydown', event => { if (event.key === 'ArrowDown') { event.preventDefault(); open(); } });
+  menu.addEventListener('keydown', event => {
+    const options = [...menu.querySelectorAll('[role="option"]')]; const index = options.indexOf(document.activeElement);
+    if (event.key === 'Escape') { event.preventDefault(); close(); trigger.focus(); }
+    else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); options[(index + (event.key === 'ArrowDown' ? 1 : options.length - 1)) % options.length].focus(); }
+    else if (event.key === 'Tab') close();
+  });
+}
+function setSettingsTab(tab) {
+  document.querySelectorAll('[data-settings-tab]').forEach(button => {
+    const selected = button.dataset.settingsTab === tab;
+    button.classList.toggle('selected', selected); button.setAttribute('aria-selected', String(selected));
+    $(button.getAttribute('aria-controls')).hidden = !selected;
   });
 }
 function applyTheme(theme = store.get('theme') || 'system') {
@@ -139,11 +189,17 @@ function setLibraryState() {
   $('favoriteCount').textContent = `${favoriteCount} favorita${favoriteCount === 1 ? '' : 's'}`;
 }
 function coverStyle(track, element) {
-  const source = track.coverUrl || 'no-cover.svg';
-  element.style.backgroundImage = `url("${source}")`;
+  const source = typeof track?.coverUrl === 'string' ? track.coverUrl.trim() : '';
+  element.classList.toggle('missing-cover', !source);
+  if (!source) {
+    element.style.backgroundImage = 'none';
+    element.replaceChildren();
+    element.insertAdjacentHTML('afterbegin', '<svg class="cover-fallback" viewBox="0 0 512 512" aria-hidden="true" focusable="false"><rect class="fallback-paper" x="0" y="0" width="512" height="512" rx="72"/><circle class="fallback-disc" cx="256" cy="256" r="178"/><circle class="fallback-ring" cx="256" cy="256" r="134"/><circle class="fallback-center" cx="256" cy="256" r="84"/><circle class="fallback-hub" cx="256" cy="256" r="38"/><circle class="fallback-label" cx="256" cy="256" r="10"/><path class="fallback-groove" d="M128 357c36 29 80 45 128 45s92-16 128-45"/></svg>');
+    return;
+  }
+  element.replaceChildren();
+  element.style.backgroundImage = `url("${source.replaceAll('"', '%22')}")`;
   element.style.backgroundSize = 'cover'; element.style.backgroundPosition = 'center';
-  element.classList.toggle('missing-cover', !track.coverUrl);
-  element.textContent = '';
 }
 function renderFolderList() {
   const list = $('folderList'); list.replaceChildren();
@@ -180,14 +236,19 @@ function renderHome() {
   const items = recents.length ? recents : newest;
   const grid = $('recentGrid'); grid.replaceChildren();
   renderLosslessHome();
+  $('homeListening').hidden = tracks.length === 0;
+  $('homeTrackCount').textContent = String(tracks.length);
+  $('homeListeningCaption').textContent = `${tracks.length} faixa${tracks.length === 1 ? '' : 's'} disponível${tracks.length === 1 ? '' : 'is'} na sua biblioteca.`;
   $('recentHeading').textContent = recents.length ? 'Tocadas recentemente' : 'Adicionadas recentemente';
-  $('viewRecent').hidden = !recents.length;
   if (!items.length) {
     const empty = document.createElement('div'); empty.className = 'home-empty';
     empty.innerHTML = '<span class="home-empty-mark">♫</span><div><b>Seu próximo som começa aqui</b><small>Escolha uma pasta de músicas e suas capas aparecerão neste espaço.</small></div>';
-    const button = document.createElement('button'); button.className = 'secondary-button'; button.textContent = 'Escolher pasta'; button.addEventListener('click', chooseFolders); empty.append(button); grid.append(empty); return;
-  }
-  items.forEach(track => grid.append(createTrackCard(track, items, 'track')));
+    const button = document.createElement('button'); button.className = 'secondary-button'; button.textContent = 'Escolher pasta'; button.addEventListener('click', chooseFolders); empty.append(button); grid.append(empty);
+  } else items.forEach(track => grid.append(createTrackCard(track, items, 'track')));
+  const favoriteTracks = safeArray('favorites').map(id => tracks.find(track => track.id === id)).filter(Boolean).slice(0, 6);
+  const favoriteGrid = $('favoritesHomeGrid'); favoriteGrid.replaceChildren();
+  $('favoritesHomeEmpty').hidden = favoriteTracks.length > 0;
+  favoriteTracks.forEach(track => favoriteGrid.append(createTrackCard(track, favoriteTracks, 'track')));
 }
 function renderLosslessHome() {
   const grid = $('losslessGrid'); grid.replaceChildren();
@@ -201,7 +262,9 @@ function groupsForAlbums(items) {
   for (const track of items) {
     const key = `${track.albumArtist || track.artist}|${track.album}`;
     if (!groups.has(key)) groups.set(key, { title: track.album, artist: track.albumArtist || track.artist, tracks: [], coverUrl: track.coverUrl, kind: 'album' });
-    groups.get(key).tracks.push(track);
+    const group = groups.get(key);
+    if (!group.coverUrl && track.coverUrl) group.coverUrl = track.coverUrl;
+    group.tracks.push(track);
   }
   return [...groups.values()].map(group => ({ ...group, tracks: group.tracks.sort((a, b) => (a.discNo || 1) - (b.discNo || 1) || (a.trackNo || 0) - (b.trackNo || 0)), count: group.tracks.length }));
 }
@@ -210,7 +273,9 @@ function groupsForArtists(items) {
   for (const track of items) {
     const name = track.artist || 'Artista desconhecido';
     if (!groups.has(name)) groups.set(name, { title: name, artist: '', coverUrl: track.coverUrl, kind: 'artist', tracks: [] });
-    groups.get(name).tracks.push(track);
+    const group = groups.get(name);
+    if (!group.coverUrl && track.coverUrl) group.coverUrl = track.coverUrl;
+    group.tracks.push(track);
   }
   return [...groups.values()].map(group => ({ ...group, artist: `${group.tracks.length} faixas` })).sort((a, b) => a.title.localeCompare(b.title));
 }
@@ -242,7 +307,7 @@ function createTrackCard(item, items, kind) {
   main.addEventListener('click', () => {
     if (item.kind === 'playlist') openView(`playlist:${item.id}`);
     else if (item.kind === 'album' || item.kind === 'artist') playCollection(item.tracks);
-    else if (item.kind === 'folder') { renderFolderDialog(); $('settingsDialog').showModal(); }
+    else if (item.kind === 'folder') showSettings();
     else playTrack(item, items);
   });
   card.append(main);
@@ -604,6 +669,7 @@ function playCollection(items, { shuffle = shuffled } = {}) {
   if (!items?.length) return;
   queue = shuffle ? shuffleTracks(items) : items.slice();
   if (shuffle) { shuffled = true; store.set('shuffle', 'yes'); syncTransportStates(); }
+  else if (shuffled) { shuffled = false; store.set('shuffle', ''); syncTransportStates(); }
   queueIndex = 0; renderQueuePopover(); playTrack(queue[0], queue, { keepQueue: true });
 }
 async function nextTrack() {
@@ -824,21 +890,37 @@ async function loadLibrary() {
 function renderFolderDialog() { renderFolderList(); }
 function showSettings() {
   renderFolderDialog();
-  $('themeSelect').value = store.get('theme') || 'system';
+  setSettingsTab('general');
+  setStyledSelect('themeSelect', store.get('theme') || 'system');
   $('minimizeToTrayToggle').checked = store.get('minimizeToTray') === 'yes';
   $('crossfadeToggle').checked = crossfadeSeconds > 0;
   $('crossfadeSettings').hidden = crossfadeSeconds <= 0;
   $('crossfadeDuration').value = String(crossfadeSeconds || 4);
   $('crossfadeDurationLabel').textContent = `${crossfadeSeconds || 4} segundos`;
   $('equalizerEnabled').checked = equalizerState.enabled;
-  $('equalizerPreset').value = equalizerState.preset;
-  renderEqualizer();
+  updateEqualizerSummary();
   $('settingsDialog').showModal();
 }
 
 document.querySelectorAll('.nav-item').forEach(button => button.addEventListener('click', () => openView(button.dataset.view)));
 document.querySelectorAll('.quick-card').forEach(button => button.addEventListener('click', () => openView(button.dataset.target)));
 $('heroConnect').addEventListener('click', chooseFolders); $('addFolder').addEventListener('click', chooseFolders);
+$('playLibraryButton').addEventListener('click', () => playCollection(tracks.slice(), { shuffle: false }));
+$('shuffleLibraryButton').addEventListener('click', () => playCollection(tracks.slice(), { shuffle: true }));
+$('viewFavorites').addEventListener('click', () => openView('favorites'));
+$('editEqualizerButton').addEventListener('click', () => { setStyledSelect('equalizerPreset', equalizerState.preset); renderEqualizer(); $('equalizerDialog').showModal(); });
+$('equalizerDone').addEventListener('click', () => $('equalizerDialog').close());
+document.querySelectorAll('[data-settings-tab]').forEach(button => button.addEventListener('click', () => setSettingsTab(button.dataset.settingsTab)));
+bindStyledSelect('themeSelect', theme => { store.set('theme', theme); applyTheme(theme); });
+bindStyledSelect('equalizerPreset', preset => {
+  if (preset === 'custom') { equalizerState.preset = 'custom'; saveEqualizer(); updateEqualizerSummary(); return; }
+  equalizerState.preset = preset; equalizerState.values = [...EQ_PRESETS[preset]]; renderEqualizer(); applyEqualizer(); saveEqualizer(); updateEqualizerSummary();
+});
+document.addEventListener('pointerdown', event => {
+  if (!event.target.closest('.styled-select')) document.querySelectorAll('.styled-select.open').forEach(root => {
+    root.classList.remove('open'); root.querySelector('.styled-select-trigger').setAttribute('aria-expanded', 'false'); root.querySelector('.styled-select-menu').hidden = true;
+  });
+});
 $('accountButton').addEventListener('click', () => folders.length ? showSettings() : chooseFolders());
 $('settingsButton').addEventListener('click', showSettings);
 $('learnButton').addEventListener('click', () => $('infoDialog').showModal()); $('infoDone').addEventListener('click', () => $('infoDialog').close());
@@ -849,7 +931,7 @@ document.addEventListener('keydown', event => {
   const target = event.target;
   const editing = target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); $('searchInput').focus(); return; }
-  if (editing || $('settingsDialog').open || $('infoDialog').open || event.altKey || event.metaKey || event.ctrlKey) return;
+  if (editing || $('settingsDialog').open || $('equalizerDialog').open || $('infoDialog').open || event.altKey || event.metaKey || event.ctrlKey) return;
   if (event.code === 'Space') { event.preventDefault(); $('playButton').click(); }
   else if (event.key === 'ArrowRight' && event.shiftKey) { event.preventDefault(); nextTrack(); }
   else if (event.key === 'ArrowLeft' && event.shiftKey) { event.preventDefault(); previousTrack(); }
@@ -888,6 +970,7 @@ $('likeButton').addEventListener('click', () => {
   favorites.has(currentTrack.id) ? favorites.delete(currentTrack.id) : favorites.add(currentTrack.id);
   store.set('favorites', JSON.stringify([...favorites])); renderCurrentTrack();
   if (activeView === 'favorites') openView('favorites');
+  else if (activeView === 'listen') renderHome();
 });
 function renderQueueActions() {
   if (!queue.length) return;
@@ -909,19 +992,13 @@ function renderQueueActions() {
   toolbar.append(label, exportButton); results.prepend(toolbar);
 }
 $('saveSettings').addEventListener('click', () => { $('settingsDialog').close(); toast('Configurações salvas.'); });
-$('themeSelect').addEventListener('change', event => { const theme = event.currentTarget.value; store.set('theme', theme); applyTheme(theme); });
 const systemThemeMedia = window.matchMedia?.('(prefers-color-scheme: dark)');
 if (systemThemeMedia) {
   const onSystemThemeChange = () => { if ((store.get('theme') || 'system') === 'system') applyTheme('system'); };
   if (systemThemeMedia.addEventListener) systemThemeMedia.addEventListener('change', onSystemThemeChange);
   else systemThemeMedia.addListener?.(onSystemThemeChange);
 }
-$('equalizerEnabled').addEventListener('change', event => { equalizerState.enabled = event.currentTarget.checked; applyEqualizer(); saveEqualizer(); });
-$('equalizerPreset').addEventListener('change', event => {
-  const preset = event.currentTarget.value;
-  if (preset === 'custom') { equalizerState.preset = 'custom'; saveEqualizer(); return; }
-  equalizerState.preset = preset; equalizerState.values = [...EQ_PRESETS[preset]]; renderEqualizer(); applyEqualizer(); saveEqualizer();
-});
+$('equalizerEnabled').addEventListener('change', event => { equalizerState.enabled = event.currentTarget.checked; applyEqualizer(); saveEqualizer(); updateEqualizerSummary(); });
 $('minimizeToTrayToggle').addEventListener('change', event => {
   store.set('minimizeToTray', event.currentTarget.checked ? 'yes' : '');
   toast(event.currentTarget.checked ? 'Ao fechar, o Isótopus ficará na bandeja.' : 'O app será encerrado ao fechar a janela.');

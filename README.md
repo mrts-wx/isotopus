@@ -1,45 +1,69 @@
 # Isótopus
 
-Player de música local para Ubuntu. A biblioteca é indexada a partir de uma ou mais pastas escolhidas no app. A interface exibe tags, capas, duração, codec, taxa de amostragem e profundidade de bits quando disponíveis. Os arquivos de áudio permanecem locais. Quando solicitadas, buscas de letras enviam metadados da faixa ao LRCLIB; a busca manual abre o navegador com o título e artista para pesquisa.
+Player de música local para Linux e Windows, feito para organizar e ouvir uma coleção pessoal. A biblioteca fica no computador; o app oferece playlists, busca, favoritos, letras sincronizadas, equalizador e controles de mídia do sistema.
 
-## Formatos
+## Recursos
 
-O player lê FLAC, WAV, AIFF, M4A/ALAC, MP3, AAC, Ogg e Opus. A reprodução passa pelo decodificador de áudio do Chromium/Electron e pelo dispositivo de saída selecionado no Ubuntu. Não prometemos saída bit-perfect: o sistema de áudio pode aplicar mixagem ou reamostragem.
+- Reprodução local de FLAC, WAV, AIFF, M4A/ALAC, MP3, AAC, Ogg e Opus, conforme o suporte do Electron e do sistema.
+- Biblioteca monitorada, playlists, busca, favoritos e fila de reprodução.
+- Letras LRC e sincronização manual por faixa.
+- Temas claro, escuro e automático, além de equalizador com perfis.
+- Pacotes de distribuição para Debian/Ubuntu, Arch e Windows.
 
-O Isótopus classifica o codec armazenado. Ele não consegue confirmar se um FLAC foi criado a partir de uma origem sem perdas ou convertido de um arquivo comprimido. `yt-dlp` seleciona o melhor fluxo oferecido pela origem, que pode continuar comprimido; converter esse fluxo para FLAC não recupera os dados descartados.
+O app identifica o codec armazenado, mas não consegue verificar se um arquivo lossless veio de uma fonte sem perdas. A saída de áudio também pode ser mixada ou reamostrada pelo sistema operacional.
 
-## Playlists e letras
+## Requisitos
 
-Crie playlists locais no painel lateral e adicione faixas pelo botão `＋` dos cards. A fila abre para cima pelo botão de lista no player e pode ser exportada como M3U8. Clique na capa do player para abrir a tela de reprodução com letras: o Isótopus lê um `.lrc` ao lado da música, abre arquivos `.lrc`/`.txt`, busca faixas sob demanda no [LRCLIB](https://lrclib.net/docs) e permite ajustar o offset ou marcar cada linha no tempo atual. Letras aceitas e tempos manuais ficam salvos no perfil local do app e continuam disponíveis depois de reiniciar. Se a busca não encontrar a letra, pesquise no navegador, copie o texto e cole no campo do app. Tempos no formato LRC são detectados automaticamente; texto simples pode ser sincronizado linha por linha. Letras também podem ser exportadas como `.lrc` junto da faixa.
+- Node.js e npm para executar ou compilar a partir do código.
+- Linux com bibliotecas do Electron para executar as versões Linux; Windows para executar o instalador Windows.
 
-O tema noturno e as preferências de reprodução são salvos localmente. A opção **Minimizar para a bandeja** mantém o app aberto quando sua janela é fechada, desde que o ambiente Ubuntu ofereça uma bandeja do sistema. A **Transição suave** opcional mistura o fim de uma faixa com o início da próxima por 2 a 8 segundos; ela não altera o andamento nem tenta sincronizar batidas.
-
-## Executar
+## Executar a partir do código
 
 ```bash
-npm install
+npm ci
 npm start
 ```
 
-Na primeira execução, escolha uma pasta com seus arquivos. O app acompanha mudanças e atualiza a biblioteca. Use **Biblioteca e ajustes → Adicionar pasta** para incluir mais pastas.
-Depois que uma pasta for selecionada, o painel de boas-vindas some; o cartão da biblioteca e **Biblioteca e ajustes** abrem o gerenciamento de pastas.
+Para rodar a suíte automatizada:
 
-Para criar os pacotes de teste:
+```bash
+npm test
+```
+
+## Compilar instaladores
 
 ```bash
 npm run build:debian
 npm run build:arch
+npm run build:windows
 ```
 
-O `.deb` pode ser instalado em Debian e Ubuntu com `sudo apt install ./Isotopus-0.1.5-amd64.deb`. O pacote Arch (`.pacman`) pode ser instalado com `sudo pacman -U ./Isotopus-0.1.5-*.pacman`.
+Os arquivos gerados ficam em `dist/`. As configurações de build e ícones ficam em `build/`; testes automatizados em `test/`.
 
-## Controles
+## Builds publicadas
 
-O Isótopus salva volume, aleatório e repetição. Os controles de mídia do desktop são integrados quando disponíveis. Atalhos: `Espaço` reproduz/pausa, `←/→` busca 5 segundos, `Shift + ←/→` troca de faixa, `↑/↓` ajusta o volume e `Ctrl + K` foca a busca. Coleções grandes carregam em blocos para manter a interface leve. A busca ignora acentos, então “João” também encontra “Joao”.
+Os instaladores históricos e atuais estão organizados em `release-assets/`, por versão (`v0.1.0` a `v0.1.9`). Eles são mantidos fora dos commits e enviados como anexos de Releases do GitHub, inclusive porque alguns arquivos ultrapassam o limite de tamanho de arquivos comuns do Git.
 
-## Verificação
+Consulte [PUBLISHING.md](PUBLISHING.md) para criar o repositório, enviar o código e publicar os instaladores. Para incluir builds futuras, copie os arquivos para a pasta da versão correspondente em `release-assets/` e execute `scripts/publish-releases.sh`.
 
-```bash
-npm test
-npm audit --audit-level=low
-```
+## Instalar uma build
+
+Baixe o instalador da versão desejada na página **Releases** do repositório e escolha o arquivo correspondente ao seu sistema:
+
+- **Windows:** baixe `Isotopus-<versão>-setup-x64.exe`, abra o arquivo e siga o assistente. O instalador permite escolher a pasta e criar atalhos.
+- **Debian ou Ubuntu:** baixe `Isotopus-<versão>-amd64.deb`, abra um terminal na pasta do download e rode `sudo apt install ./Isotopus-<versão>-amd64.deb`. O `apt` instala o pacote e tenta resolver as dependências.
+- **Arch Linux:** baixe `Isotopus-<versão>-x64.pacman` e rode `sudo pacman -U ./Isotopus-<versão>-x64.pacman` no terminal, dentro da pasta do download.
+
+Substitua `<versão>` pelo número publicado, como `0.1.9`. Nem toda versão tem instalador para todos os sistemas; use um arquivo que esteja anexado à Release daquela versão. O [CHANGELOG](CHANGELOG.md) resume as mudanças da versão mais recente; cada Release também apresenta as notas daquela versão.
+
+### Sobre avisos de segurança
+
+Estas builds de teste podem não ter assinatura digital de editor. No Windows, o SmartScreen pode informar que o editor é desconhecido ou que o arquivo foi baixado com pouca frequência; o antivírus também pode inspecionar instaladores Electron. Esses avisos, isoladamente, não confirmam que o arquivo é malicioso nem garantem que seja seguro. Baixe apenas pela página oficial de Releases deste projeto e confira o nome e a versão do arquivo. Se não reconhecer a origem ou o aviso indicar uma ameaça específica, cancele e não execute.
+
+No Linux, o sistema pode pedir sua senha para instalar o pacote. Esse pedido é esperado para uma instalação do sistema; confira o nome do pacote e a versão no comando antes de confirmar. Se houver erro de dependência, use o gerenciador de pacotes indicado acima e não tente contornar o aviso removendo proteções do sistema.
+
+O player mantém a biblioteca e a reprodução no computador. Quando você solicita uma busca de letra, metadados da faixa podem ser enviados ao [LRCLIB](https://lrclib.net/docs); buscas manuais abrem o navegador com título e artista para pesquisa.
+
+## Licença
+
+O pacote declara `UNLICENSED`. Nenhuma licença de código aberto foi adicionada; consulte o autor antes de reutilizar ou redistribuir o código fora das builds publicadas.
