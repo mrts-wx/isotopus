@@ -8,13 +8,6 @@ let audio = new Audio();
 audio.preload = 'metadata';
 let standbyAudio = new Audio();
 standbyAudio.preload = 'metadata'; standbyAudio.volume = 0;
-const EQ_FREQUENCIES = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
-const EQ_PRESETS = { flat: [0,0,0,0,0,0,0,0,0,0], rock: [5,4,3,1,-1,-1,2,3,4,5], pop: [-1,1,3,4,2,0,-1,-1,1,2], jazz: [3,2,1,2,-1,-1,0,1,2,3], classical: [4,3,2,1,-1,-1,0,2,3,4], electronic: [5,4,1,-1,-2,1,2,1,3,4], vocal: [-2,-1,0,2,4,4,3,1,0,-1] };
-const EQ_LABELS = { flat: 'Flat', rock: 'Rock', pop: 'Pop', jazz: 'Jazz', classical: 'Clássico', electronic: 'Eletrônico', vocal: 'Voz', custom: 'Personalizado' };
-let equalizerState = { enabled: store.get('equalizerEnabled') !== 'no', preset: 'flat', values: [...EQ_PRESETS.flat] };
-try { const saved = JSON.parse(store.get('equalizer') || 'null'); if (saved && Array.isArray(saved.values) && saved.values.length === EQ_FREQUENCIES.length) equalizerState = { enabled: store.get('equalizerEnabled') !== 'no', preset: saved.preset || 'custom', values: saved.values.map(value => Math.max(-12, Math.min(12, Number(value) || 0))) }; } catch {}
-let audioContext = null;
-const audioGraphs = new WeakMap();
 let crossfadeSeconds = 0;
 let crossfadeActive = false;
 let crossfadeTimer = 0;
@@ -23,6 +16,7 @@ let baseVolume = 0.75;
 let crossfadeFromTrack = null;
 let crossfadeFromIndex = -1;
 const shuffleTracks = window.IsotopusShuffle.shuffleTracks;
+let equalizer;
 let tracks = [];
 let folders = [];
 let activeView = 'listen';
@@ -48,64 +42,6 @@ const titles = { listen: 'Ouvir agora', songs: 'Faixas', artists: 'Artistas', fa
 const safeArray = key => { try { return JSON.parse(store.get(key) || '[]'); } catch { return []; } };
 const normalizeSearch = value => String(value || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('pt-BR').trim();
 
-function setupAudioGraph(deck) {
-  if (audioGraphs.has(deck)) return audioGraphs.get(deck);
-  try {
-    const Context = window.AudioContext || window.webkitAudioContext;
-    if (!Context) return null;
-    audioContext ||= new Context();
-    const source = audioContext.createMediaElementSource(deck);
-    const filters = EQ_FREQUENCIES.map((frequency, index) => {
-      const filter = audioContext.createBiquadFilter();
-      filter.type = index === 0 ? 'lowshelf' : index === EQ_FREQUENCIES.length - 1 ? 'highshelf' : 'peaking';
-      filter.frequency.value = frequency;
-      if (filter.type === 'peaking') filter.Q.value = 1.1;
-      return filter;
-    });
-    source.connect(filters[0]);
-    filters.slice(1).forEach((filter, index) => filters[index].connect(filter));
-    filters.at(-1).connect(audioContext.destination);
-    const graph = { source, filters }; audioGraphs.set(deck, graph); applyEqualizerToGraph(graph); return graph;
-  } catch { return null; }
-}
-function applyEqualizerToGraph(graph) {
-  if (!graph) return;
-  graph.filters.forEach((filter, index) => {
-    const gain = equalizerState.enabled ? equalizerState.values[index] : 0;
-    if (audioContext && filter.gain) filter.gain.setTargetAtTime(gain, audioContext.currentTime, .035);
-  });
-}
-function applyEqualizer() { for (const deck of [audio, standbyAudio]) applyEqualizerToGraph(audioGraphs.get(deck)); }
-async function playAudio(deck) {
-  setupAudioGraph(deck);
-  if (audioContext?.state === 'suspended') await audioContext.resume().catch(() => {});
-  await deck.play();
-}
-function saveEqualizer() { store.set('equalizer', JSON.stringify({ preset: equalizerState.preset, values: equalizerState.values })); store.set('equalizerEnabled', equalizerState.enabled ? 'yes' : 'no'); }
-function renderEqualizer() {
-  const container = $('equalizerBands'); if (!container) return;
-  container.replaceChildren();
-  EQ_FREQUENCIES.forEach((frequency, index) => {
-    const label = document.createElement('label'); label.className = 'eq-band'; label.htmlFor = `eqBand${index}`;
-    const name = document.createElement('span'); name.textContent = frequency >= 1000 ? `${frequency / 1000}k` : String(frequency);
-    const slider = document.createElement('input'); slider.type = 'range'; slider.id = `eqBand${index}`; slider.min = '-12'; slider.max = '12'; slider.step = '0.5'; slider.value = String(equalizerState.values[index]); slider.setAttribute('aria-label', `${frequency} Hz`);
-    const value = document.createElement('small'); value.textContent = `${equalizerState.values[index] > 0 ? '+' : ''}${equalizerState.values[index]} dB`;
-    slider.addEventListener('input', () => {
-      const nextValue = Number.parseFloat(slider.value);
-      if (!Number.isFinite(nextValue)) return;
-      equalizerState.values[index] = Math.max(-12, Math.min(12, nextValue));
-      equalizerState.preset = 'custom'; setStyledSelect('equalizerPreset', 'custom');
-      value.textContent = `${nextValue > 0 ? '+' : ''}${nextValue} dB`;
-      updateEqualizerSummary(); applyEqualizer(); saveEqualizer();
-    });
-    const control = document.createElement('div'); control.className = 'eq-band-control'; control.append(slider);
-    label.append(name, control, value); container.append(label);
-  });
-}
-function updateEqualizerSummary() {
-  const summary = $('equalizerSummary');
-  if (summary) summary.textContent = `${equalizerState.enabled ? 'Equalizador ativado' : 'Equalizador desativado'} · ${EQ_LABELS[equalizerState.preset] || EQ_LABELS.custom}`;
-}
 function setStyledSelect(id, value) {
   const root = $(id); if (!root) return;
   const option = root.querySelector(`[data-option="${value}"]`);
@@ -136,6 +72,8 @@ function bindStyledSelect(id, onChange) {
     else if (event.key === 'Tab') close();
   });
 }
+equalizer = window.IsotopusEqualizer.create({ store, getElement: $, setStyledSelect, decks: () => [audio, standbyAudio] });
+
 function setSettingsTab(tab) {
   document.querySelectorAll('[data-settings-tab]').forEach(button => {
     const selected = button.dataset.settingsTab === tab;
@@ -602,7 +540,7 @@ function beginCrossfade() {
   incoming.src = incomingTrack.streamUrl; incoming.load(); incoming.volume = 0;
   renderCurrentTrack(); rememberTrack(incomingTrack); renderQueuePopover();
   if (!$('lyricsScreen').hidden) loadCurrentLyrics();
-  playAudio(incoming).then(() => {
+  equalizer.play(incoming).then(() => {
     if (!crossfadeActive) return;
     const startedAt = performance.now(); const durationMs = duration * 1000;
     const step = () => {
@@ -626,7 +564,7 @@ function updateMediaSession() {
   if (!session) return;
   try {
     if (currentTrack && typeof MediaMetadata !== 'undefined') {
-      session.metadata = new MediaMetadata({ title: currentTrack.title, artist: currentTrack.artist, album: currentTrack.album, artwork: [{ src: currentTrack.coverUrl || 'build/icons/512x512.png', sizes: '512x512', type: 'image/png' }] });
+      session.metadata = new MediaMetadata({ title: currentTrack.title, artist: currentTrack.artist, album: currentTrack.album, artwork: [{ src: currentTrack.coverUrl || '../assets/icons/512x512.png', sizes: '512x512', type: 'image/png' }] });
     } else session.metadata = null;
     session.playbackState = currentTrack ? (audio.paused ? 'paused' : 'playing') : 'none';
     if (Number.isFinite(audio.duration) && audio.duration > 0 && typeof session.setPositionState === 'function') session.setPositionState({ duration: audio.duration, playbackRate: audio.playbackRate || 1, position: Math.min(audio.currentTime || 0, audio.duration) });
@@ -650,7 +588,7 @@ async function playTrack(track, list = tracks, { keepQueue = false, recovery = f
   audio.src = track.streamUrl; audio.load();
   if (!$('lyricsScreen').hidden) loadCurrentLyrics();
   try {
-    await playAudio(audio);
+    await equalizer.play(audio);
     rememberTrack(track); renderCurrentTrack();
   } catch (error) { if (currentTrack?.id === track.id) toast(`Não foi possível reproduzir ${track.codec}: ${error.message}`); }
 }
@@ -686,7 +624,7 @@ function playCollection(items, { shuffle = shuffled } = {}) {
 async function nextTrack() {
   if (!queue.length) return;
   cancelCrossfade();
-  if (repeatMode === 2 && currentTrack) { audio.currentTime = 0; await playAudio(audio); return; }
+  if (repeatMode === 2 && currentTrack) { audio.currentTime = 0; await equalizer.play(audio); return; }
   if (queueIndex + 1 < queue.length) queueIndex++;
   else if (repeatMode === 1) queueIndex = 0;
   else { currentTrack = null; audio.pause(); audio.removeAttribute('src'); audio.load(); renderCurrentTrack(); return; }
@@ -1031,8 +969,8 @@ function showSettings() {
   $('crossfadeSettings').hidden = crossfadeSeconds <= 0;
   $('crossfadeDuration').value = String(crossfadeSeconds || 4);
   $('crossfadeDurationLabel').textContent = `${crossfadeSeconds || 4} segundos`;
-  $('equalizerEnabled').checked = equalizerState.enabled;
-  updateEqualizerSummary();
+  $('equalizerEnabled').checked = equalizer.state.enabled;
+  equalizer.summary();
   $('settingsDialog').showModal();
 }
 
@@ -1042,15 +980,14 @@ $('heroConnect').addEventListener('click', chooseFolders); $('addFolder').addEve
 $('playLibraryButton').addEventListener('click', () => playCollection(tracks.slice(), { shuffle: false }));
 $('shuffleLibraryButton').addEventListener('click', () => playCollection(tracks.slice(), { shuffle: true }));
 $('viewFavorites').addEventListener('click', () => openView('favorites'));
-$('editEqualizerButton').addEventListener('click', () => { setStyledSelect('equalizerPreset', equalizerState.preset); renderEqualizer(); $('equalizerDialog').showModal(); });
+$('editEqualizerButton').addEventListener('click', () => { setStyledSelect('equalizerPreset', equalizer.state.preset); equalizer.render(); $('equalizerDialog').showModal(); });
 $('equalizerDone').addEventListener('click', () => $('equalizerDialog').close());
 document.querySelectorAll('[data-settings-tab]').forEach(button => button.addEventListener('click', () => setSettingsTab(button.dataset.settingsTab)));
 bindStyledSelect('themeSelect', theme => { store.set('theme', theme); applyTheme(theme); });
 bindStyledSelect('appScaleSelect', value => { store.set('appScale', value); window.isotopus.setZoomFactor(Number(value) / 100); });
 window.isotopus.setZoomFactor(Number(store.get('appScale') || 100) / 100);
 bindStyledSelect('equalizerPreset', preset => {
-  if (preset === 'custom') { equalizerState.preset = 'custom'; saveEqualizer(); updateEqualizerSummary(); return; }
-  equalizerState.preset = preset; equalizerState.values = [...EQ_PRESETS[preset]]; renderEqualizer(); applyEqualizer(); saveEqualizer(); updateEqualizerSummary();
+  equalizer.setPreset(preset);
 });
 document.addEventListener('pointerdown', event => {
   if (!event.target.closest('.styled-select')) document.querySelectorAll('.styled-select.open').forEach(root => {
@@ -1078,7 +1015,7 @@ document.addEventListener('keydown', event => {
 });
 $('playButton').addEventListener('click', async () => {
   if (!currentTrack) { if (!folders.length) chooseFolders(); else openView('songs'); return; }
-  try { if (audio.paused) await playAudio(audio); else pausePlayback(); renderCurrentTrack(); }
+  try { if (audio.paused) await equalizer.play(audio); else pausePlayback(); renderCurrentTrack(); }
   catch (error) { toast(`Não foi possível reproduzir: ${error.message}`); }
 });
 $('nextButton').addEventListener('click', nextTrack); $('previousButton').addEventListener('click', previousTrack);
@@ -1134,7 +1071,7 @@ if (systemThemeMedia) {
   if (systemThemeMedia.addEventListener) systemThemeMedia.addEventListener('change', onSystemThemeChange);
   else systemThemeMedia.addListener?.(onSystemThemeChange);
 }
-$('equalizerEnabled').addEventListener('change', event => { equalizerState.enabled = event.currentTarget.checked; applyEqualizer(); saveEqualizer(); updateEqualizerSummary(); });
+$('equalizerEnabled').addEventListener('change', event => equalizer.setEnabled(event.currentTarget.checked));
 $('minimizeToTrayToggle').addEventListener('change', event => {
   store.set('minimizeToTray', event.currentTarget.checked ? 'yes' : '');
   toast(event.currentTarget.checked ? 'Ao fechar, o Isótopus ficará na bandeja.' : 'O app será encerrado ao fechar a janela.');
@@ -1233,7 +1170,7 @@ function attachAudioDeck(deck) {
 }
 attachAudioDeck(audio); attachAudioDeck(standbyAudio);
 if (navigator.mediaSession) {
-  for (const [action, handler] of Object.entries({ play: () => playAudio(audio), pause: pausePlayback, previoustrack: previousTrack, nexttrack: nextTrack, seekbackward: details => { audio.currentTime = Math.max(0, audio.currentTime - (details.seekOffset || 10)); }, seekforward: details => { audio.currentTime = Math.min(audio.duration || Infinity, audio.currentTime + (details.seekOffset || 10)); }, seekto: details => { if (Number.isFinite(audio.duration)) audio.currentTime = Math.max(0, Math.min(audio.duration, details.seekTime)); } })) {
+  for (const [action, handler] of Object.entries({ play: () => equalizer.play(audio), pause: pausePlayback, previoustrack: previousTrack, nexttrack: nextTrack, seekbackward: details => { audio.currentTime = Math.max(0, audio.currentTime - (details.seekOffset || 10)); }, seekforward: details => { audio.currentTime = Math.min(audio.duration || Infinity, audio.currentTime + (details.seekOffset || 10)); }, seekto: details => { if (Number.isFinite(audio.duration)) audio.currentTime = Math.max(0, Math.min(audio.duration, details.seekTime)); } })) {
     try { navigator.mediaSession.setActionHandler(action, handler); } catch {}
   }
 }

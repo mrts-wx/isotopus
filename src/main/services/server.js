@@ -24,7 +24,7 @@ function createStaticServer(root, resolveAsset = () => null) {
       return;
     }
 
-    const requested = pathname === '/' ? 'index.html' : pathname.slice(1);
+    const requested = pathname === '/' ? 'renderer/index.html' : pathname.slice(1);
     const file = path.resolve(base, requested);
     const relative = path.relative(base, file);
     if (relative.startsWith('..' + path.sep) || relative === '..' || path.isAbsolute(relative)) {

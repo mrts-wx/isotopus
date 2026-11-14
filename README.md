@@ -1,4 +1,4 @@
-![Banner do Isótopus](assets/isotopus-banner.png)
+![Banner do Isótopus](assets/branding/isotopus-banner.png)
 
 Player de música local para Linux e Windows, feito para organizar e ouvir uma coleção pessoal. A biblioteca fica no computador; o app oferece playlists, busca, favoritos, letras sincronizadas, equalizador e controles de mídia do sistema.
 
@@ -40,11 +40,11 @@ npm run build:arch
 npm run build:windows
 ```
 
-Os arquivos gerados ficam em `dist/`. As configurações de build e ícones ficam em `build/`; testes automatizados em `test/`.
+Os arquivos gerados ficam em `dist/`. O código do app fica em `src/`, organizado em `main/controllers`, `main/services`, `main/workers`, `renderer/controllers`, `renderer/styles` e `shared`. Recursos de marca e ícones ficam em `assets/`; scripts de build em `scripts/`; testes automatizados em `test/`.
 
 ## Builds publicadas
 
-Os instaladores históricos e atuais estão organizados em `release-assets/`, por versão (`v0.1.0` a `v0.2.0`). Eles são mantidos fora dos commits e enviados como anexos de Releases do GitHub, inclusive porque alguns arquivos ultrapassam o limite de tamanho de arquivos comuns do Git.
+Os instaladores históricos e atuais estão organizados em `release-assets/`, por versão (`v0.1.0` a `v0.2.1`). Eles são mantidos fora dos commits e enviados como anexos de Releases do GitHub, inclusive porque alguns arquivos ultrapassam o limite de tamanho de arquivos comuns do Git.
 
 
 ## Instalar uma build

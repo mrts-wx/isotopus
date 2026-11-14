@@ -10,7 +10,7 @@
   "description": "Player local de música com playlists e letras sincronizadas, incluindo alinhamento automático",
   "homepage": "https://github.com/mrts-wx/isotopus",
   "license": "UNLICENSED",
-  "main": "main.js",
+  "main": "src/main/main.js",
   "scripts": {
     "start": "node scripts/patch-transformers-electron.js && electron .",
     "test": "node --test",
@@ -32,33 +32,12 @@
     "productName": "Isótopus",
     "extraResources": [
       {
-        "from": "lyrics-worker.cjs",
+        "from": "src/main/workers/lyrics-worker.cjs",
         "to": "lyrics-worker.cjs"
       }
     ],
     "files": [
-      "main.js",
-      "sharp-stub.mjs",
-      "preload.js",
-      "server.js",
-      "flac.js",
-      "library.js",
-      "playlist.js",
-      "shuffle.js",
-      "lyrics.js",
-      "index.html",
-      "app.js",
-      "styles.css",
-      "theme.css",
-      "motion.css",
-      "local.css",
-      "polish.css",
-      "clarity.css",
-      "lyrics.css",
-      "features.css",
-      "home-player.css",
-      "no-cover.svg",
-      "build/icons/**",
+      "src/**",
       "README.md",
       "package.json",
       "node_modules/**",
@@ -72,7 +51,7 @@
         "deb"
       ],
       "category": "AudioVideo",
-      "icon": "build/icons",
+      "icon": "src/assets/icons",
       "syncDesktopName": true,
       "artifactName": "Isotopus-${version}-${arch}.${ext}"
     },
@@ -80,7 +59,7 @@
       "target": [
         "nsis"
       ],
-      "icon": "build/icons/isotopus.ico",
+      "icon": "src/assets/icons/isotopus.ico",
       "artifactName": "Isotopus-${version}-setup-${arch}.${ext}"
     },
     "nsis": {

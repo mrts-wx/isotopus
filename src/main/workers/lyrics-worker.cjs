@@ -1,7 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const { alignLyricsToTranscript } = require(path.join(process.env.ISOTOPUS_APP_PATH, 'lyrics.js'));
+const { alignLyricsToTranscript } = require(path.join(process.env.ISOTOPUS_APP_PATH, 'src', 'shared', 'lyrics.js'));
 
 const parentPort = process.parentPort;
 

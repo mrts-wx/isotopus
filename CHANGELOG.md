@@ -1,5 +1,10 @@
 # Isótopus 0.2.1
 
+## Estrutura interna
+
+- Reorganizado o código em `src/main`, `src/renderer` e `src/shared`, com controladores independentes para biblioteca, playlists, letras e equalizador, facilitando manutenção e novas funções.
+- Ícones e recursos da marca agora ficam em pastas próprias; o empacotamento aponta para a nova estrutura.
+
 ## Uso de memória
 
 - Capas incorporadas nos arquivos de música são lidas do cache em disco sob demanda, em vez de manter todas as imagens carregadas na memória do processo principal.

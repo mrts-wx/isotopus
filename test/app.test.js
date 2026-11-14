@@ -4,15 +4,16 @@ const fs = require('node:fs/promises');
 const fsSync = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { createStaticServer } = require('../server');
-const { createLibrary } = require('../library');
-const { buildM3u } = require('../playlist');
-const { shuffleTracks } = require('../shuffle');
-const { parseLyrics, formatLyrics, rankLyricsRecords, alignLyricsToTranscript } = require('../lyrics');
-const { repairFlacPictureMime } = require('../flac');
+const { createStaticServer } = require('../src/main/services/server');
+const { createLibrary } = require('../src/main/services/library');
+const { buildM3u } = require('../src/main/services/playlist');
+const { shuffleTracks } = require('../src/shared/shuffle');
+const { parseLyrics, formatLyrics, rankLyricsRecords, alignLyricsToTranscript } = require('../src/shared/lyrics');
+const { repairFlacPictureMime } = require('../src/main/services/flac');
 
 const root = path.resolve(__dirname, '..');
-const read = name => fsSync.readFileSync(path.join(root, name), 'utf8');
+const sourcePaths = { 'main.js': 'src/main/main.js', 'preload.js': 'src/main/preload.js', 'app.js': 'src/renderer/app.js', 'index.html': 'src/renderer/index.html', 'styles.css': 'src/renderer/styles/styles.css', 'theme.css': 'src/renderer/styles/theme.css', 'motion.css': 'src/renderer/styles/motion.css', 'local.css': 'src/renderer/styles/local.css', 'polish.css': 'src/renderer/styles/polish.css', 'clarity.css': 'src/renderer/styles/clarity.css', 'lyrics.css': 'src/renderer/styles/lyrics.css', 'features.css': 'src/renderer/styles/features.css', 'home-player.css': 'src/renderer/styles/home-player.css', 'lyrics.js': 'src/shared/lyrics.js', 'shuffle.js': 'src/shared/shuffle.js', 'lyrics-worker.cjs': 'src/main/workers/lyrics-worker.cjs', 'no-cover.svg': 'src/assets/no-cover.svg', 'Discord-description.txt': 'docs/Discord-description.txt', 'equalizer-controller.js': 'src/renderer/controllers/equalizer-controller.js', 'lyrics-controller.js': 'src/main/controllers/lyrics-controller.js' };
+const read = name => fsSync.readFileSync(path.join(root, sourcePaths[name] || name), 'utf8');
 
 function makeWav() {
   const sampleRate = 44100, samples = 4410, dataBytes = samples * 2;
@@ -31,7 +32,7 @@ test('local app serves its UI and blocks file path traversal', async () => {
   assert.match(html, /Escolher pasta de músicas/);
   assert.match(main, /server\.listen\(0, '127\.0\.0\.1'/);
   assert.doesNotMatch(html, /musickit\.js|developerToken|Apple Music/);
-  const server = createStaticServer(root);
+  const server = createStaticServer(path.join(root, 'src'));
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   try {
     const origin = `http://127.0.0.1:${server.address().port}`;
@@ -39,7 +40,7 @@ test('local app serves its UI and blocks file path traversal', async () => {
     assert.equal(page.status, 200);
     assert.equal(page.headers.get('referrer-policy'), 'strict-origin');
     assert.match(await page.text(), /Isótopus/);
-    assert.equal((await fetch(`${origin}/local.css`)).headers.get('content-type'), 'text/css; charset=utf-8');
+    assert.equal((await fetch(`${origin}/renderer/styles/local.css`)).headers.get('content-type'), 'text/css; charset=utf-8');
     assert.equal((await fetch(`${origin}/missing-file`)).status, 404);
     assert.equal((await fetch(`${origin}/%2e%2e%2fpackage.json`)).status, 403);
   } finally { await new Promise(resolve => server.close(resolve)); }
@@ -205,12 +206,12 @@ test('floating docks keep their dimensions and center the player controls', () =
   assert.doesNotMatch(polish.match(/\.player-bar\{[^}]+\}/)[0], /transform/);
   assert.match(polish, /\.play-button\{width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center/);
   assert.match(polish, /padding:0 0 0 2px/);
-  assert.match(read('index.html'), /href="polish\.css"/);
+  assert.match(read('index.html'), /href="styles\/polish\.css"/);
 });
 
 test('large libraries render in batches and player supports desktop controls', () => {
   const app = read('app.js');
-  assert.match(app, /const PAGE_SIZE = 120/);
+  assert.match(app, /const PAGE_SIZE = 48/);
   assert.match(app, /Mostrar mais ·/);
   assert.match(app, /navigator\.mediaSession\.setActionHandler/);
   assert.match(app, /event\.code === 'Space'/);
@@ -244,8 +245,8 @@ test('playlists, full-screen lyrics, and the Isótopus no-cover mark are include
   assert.match(app, /function installDockMagnification/);
   assert.match(app, /dock-neighbor/);
   assert.match(app, /cover-fallback/);
-  assert.ok(fsSync.existsSync(path.join(root, 'no-cover.svg')));
-  for (const file of ['lyrics.js', 'shuffle.js', 'flac.js', 'lyrics.css', 'clarity.css', 'features.css', 'home-player.css', 'no-cover.svg', 'build/icons/**']) assert.ok(pkg.build.files.includes(file));
+  assert.ok(fsSync.existsSync(path.join(root, 'src/assets/no-cover.svg')));
+  assert.ok(pkg.build.files.includes('src/**'));
 });
 
 test('v0.2.0 preserves the player features and adds local automatic lyric alignment', () => {
@@ -273,8 +274,9 @@ test('v0.2.0 preserves the player features and adds local automatic lyric alignm
   assert.match(html, /id="crossfadeToggle"/);
   assert.match(app, /getPersistentStore/);
   assert.match(app, /saveLyricsState/);
-  assert.match(main, /lyrics:state:get/);
-  assert.match(main, /lyrics:state:set/);
+  const lyricsController = read('lyrics-controller.js');
+  assert.match(lyricsController, /lyrics:state:get/);
+  assert.match(lyricsController, /lyrics:state:set/);
   assert.match(main, /new Tray/);
   assert.match(main, /minimizeToTray/);
   assert.match(preload, /sendSync\('store:get'\)/);
@@ -284,11 +286,11 @@ test('v0.2.0 preserves the player features and adds local automatic lyric alignm
   assert.match(main, /backgroundThrottling: false/);
   assert.match(app, /crossfadeTimer = setInterval\(step, 40\)/);
   assert.doesNotMatch(app, /requestAnimationFrame\(step\)/);
-  assert.match(app, /build\/icons\/512x512\.png/);
+  assert.match(app, /assets\/icons\/512x512\.png/);
   assert.match(html, /class="recent-grid" id="recentGrid"/);
   assert.match(html, /id="losslessEmpty"/);
   assert.match(html, /id="losslessGrid"/);
-  assert.match(html, /src="build\/icons\/128x128\.png"/);
+  assert.match(html, /src="\.\.\/assets\/icons\/128x128\.png"/);
   assert.doesNotMatch(html, /id="backButton"|id="forwardButton"/);
   assert.doesNotMatch(html, /O formato original importa|rescanButton/);
   assert.match(app, /function renderPlaylistPlaybackControls/);
@@ -305,11 +307,12 @@ test('v0.2.0 preserves the player features and adds local automatic lyric alignm
   assert.match(html, /skip-button/);
   assert.match(app, /setPersistentStore/);
   assert.doesNotMatch(app, /localStorage/);
-  assert.match(app, /function setupAudioGraph/);
-  assert.match(app, /createBiquadFilter/);
-  assert.match(app, /async function playAudio/);
+  const equalizer = read('equalizer-controller.js');
+  assert.match(equalizer, /function setup\(deck\)/);
+  assert.match(equalizer, /createBiquadFilter/);
+  assert.match(equalizer, /async function play\(deck\)/);
   assert.match(app, /function applyTheme/);
-  assert.match(app, /equalizerState\.values/);
+  assert.match(app, /equalizer\.state\.values/);
   assert.match(app, /Number\.parseFloat\(slider\.value\)/);
   assert.match(app, /function bindStyledSelect/);
   assert.match(app, /function setSettingsTab/);
@@ -342,17 +345,17 @@ test('desktop identity, app clarity, and launcher icon are configured', () => {
   const pkg = JSON.parse(read('package.json'));
   const app = read('app.js');
   assert.equal(pkg.name, 'isotopus');
-  assert.equal(pkg.version, '0.2.0');
+  assert.equal(pkg.version, '0.2.1');
   assert.equal(pkg.dependencies['@huggingface/transformers'], '^3.8.1');
   assert.equal(pkg.scripts['build:debian'], 'electron-builder --linux deb');
   assert.equal(pkg.scripts['build:arch'], 'electron-builder --linux pacman');
   assert.equal(pkg.scripts['build:windows'], 'electron-builder --win nsis');
   assert.match(pkg.description, /playlists e letras sincronizadas/);
   assert.equal(pkg.build.productName, 'Isótopus');
-  assert.equal(pkg.build.linux.icon, 'build/icons');
-  assert.equal(pkg.build.win.icon, 'build/icons/isotopus.ico');
+  assert.equal(pkg.build.linux.icon, 'src/assets/icons');
+  assert.equal(pkg.build.win.icon, 'src/assets/icons/isotopus.ico');
   assert.ok(fsSync.existsSync(path.join(root, pkg.build.win.icon)));
-  for (const size of [32, 64, 128, 256, 512]) assert.ok(fsSync.existsSync(path.join(root, `build/icons/${size}x${size}.png`)));
+  for (const size of [32, 64, 128, 256, 512]) assert.ok(fsSync.existsSync(path.join(root, `src/assets/icons/${size}x${size}.png`)));
   assert.match(app, /aria-pressed/);
   assert.match(app, /lyrics-open/);
   assert.doesNotMatch(app, /syncPresence|lastPresenceSignature/);
