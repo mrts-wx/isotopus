@@ -1,0 +1,1 @@
+Isótopus é um player local de música para Ubuntu, feito para ouvir sem distrações. Organize faixas, álbuns e playlists, acompanhe letras sincronizadas e reproduza seus próprios arquivos em uma interface leve. Sua biblioteca permanece no seu computador.

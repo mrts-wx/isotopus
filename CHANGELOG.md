@@ -1,3 +1,38 @@
+# Isótopus 0.2.0
+
+## Letras
+
+- Ao abrir as letras de uma faixa, o Isótopus busca automaticamente no LRCLIB usando título, artista, álbum e duração, priorizando a gravação com correspondência mais forte.
+- Letras sincronizadas aparecem prontas. Se não houver correspondência, o app informa isso e mantém as opções de buscar na web, colar uma letra ou abrir um arquivo local.
+- Letras sem tempos podem receber sincronização estimada com Whisper small no próprio computador. O áudio não é enviado; o modelo é baixado na primeira utilização e fica em cache local.
+- O resultado fica salvo no Isótopus e pode ser exportado em LRC. Revise a sincronização: reconhecimento de vocais, remixes e gravações diferentes podem gerar tempos incorretos. Limite: 10 minutos e 160 MB.
+
+## Aparência e uso
+
+- Corrigido o empilhamento dos menus de tema e escala nas configurações.
+- A barra de progresso voltou à linha grossa e sólida nos estados de reprodução e pausa, tanto no player compacto quanto na tela de letras.
+- Os nomes e artistas dos cards ficam brancos e mais legíveis no tema escuro.
+- Antes de sincronizar, um aviso explica que os tempos são estimados e podem errar; a pessoa escolhe recusar ou prosseguir.
+- Evitado o carregamento da biblioteca nativa Sharp/libvips no runtime Electron durante a transcrição, prevenindo encerramentos inesperados no Linux; análise de letras usa apenas áudio.
+- A transcrição roda em um processo auxiliar separado, com limites de memória e geração por trecho; o Isótopus permanece aberto e pode ser usado enquanto ela trabalha.
+- A sincronização usa Whisper small quantizado, e o progresso do download é limitado para manter a janela responsiva. Erros ao carregar o modelo ou reconhecer a música mostram causas distintas.
+- Aberturas repetidas do Isótopus focam a janela existente, mesmo quando está oculta na bandeja; a linha de cada letra só acende quando chega ao seu tempo LRC.
+- Capa que não carrega mostra o disco ilustrado do Isótopus; o destaque da letra no tema claro usa um tom mais suave.
+
+- Tema escuro redesenhado com superfícies grafite azuladas, contraste reforçado e correções para cartões, diálogos, menus, bordas e tela de letras.
+- Nova escala de interface em Configurações: 100%, 125%, 150% ou 175%, salva neste computador e aplicada ao app inteiro.
+- O controle de busca da música usa um marcador vertical arredondado e mais largo; durante a reprodução, a trilha anima suavemente e para ao pausar. Respeita a preferência por movimento reduzido.
+- O ícone do app e os ícones dos instaladores Linux e Windows agora são gerados diretamente da imagem de marca fornecida.
+- Mantidos controles existentes de pesquisa web, sincronização manual, equalizador, crossfade, fila, favoritos e atalhos de teclado.
+
+## Observações
+
+- A busca LRCLIB depende de metadados e disponibilidade do catálogo; ela não verifica o canal de origem do áudio. Remixes e versões alternativas podem não ter correspondência correta.
+- A primeira sincronização automática precisa de internet para baixar o modelo. A análise do áudio é local e experimental.
+- Pacotes Windows x64, Debian/Ubuntu amd64 e Arch Linux x86_64 estão anexados à Release `v0.2.0`.
+
+---
+
 # Isótopus 0.1.9
 
 ## Mais controle do som, uma biblioteca mais útil

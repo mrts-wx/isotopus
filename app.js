@@ -188,18 +188,25 @@ function setLibraryState() {
   const favoriteCount = safeArray('favorites').length;
   $('favoriteCount').textContent = `${favoriteCount} favorita${favoriteCount === 1 ? '' : 's'}`;
 }
+function showCoverFallback(element) {
+  element.classList.add('missing-cover');
+  element.style.backgroundImage = 'none';
+  element.replaceChildren();
+  element.insertAdjacentHTML('afterbegin', '<svg class="cover-fallback" viewBox="0 0 512 512" aria-hidden="true" focusable="false"><rect class="fallback-paper" x="0" y="0" width="512" height="512" rx="72"/><circle class="fallback-disc" cx="256" cy="256" r="178"/><circle class="fallback-ring" cx="256" cy="256" r="134"/><circle class="fallback-center" cx="256" cy="256" r="84"/><circle class="fallback-hub" cx="256" cy="256" r="38"/><circle class="fallback-label" cx="256" cy="256" r="10"/><path class="fallback-groove" d="M128 357c36 29 80 45 128 45s92-16 128-45"/></svg>');
+}
 function coverStyle(track, element) {
   const source = typeof track?.coverUrl === 'string' ? track.coverUrl.trim() : '';
-  element.classList.toggle('missing-cover', !source);
-  if (!source) {
-    element.style.backgroundImage = 'none';
-    element.replaceChildren();
-    element.insertAdjacentHTML('afterbegin', '<svg class="cover-fallback" viewBox="0 0 512 512" aria-hidden="true" focusable="false"><rect class="fallback-paper" x="0" y="0" width="512" height="512" rx="72"/><circle class="fallback-disc" cx="256" cy="256" r="178"/><circle class="fallback-ring" cx="256" cy="256" r="134"/><circle class="fallback-center" cx="256" cy="256" r="84"/><circle class="fallback-hub" cx="256" cy="256" r="38"/><circle class="fallback-label" cx="256" cy="256" r="10"/><path class="fallback-groove" d="M128 357c36 29 80 45 128 45s92-16 128-45"/></svg>');
-    return;
-  }
+  element.style.removeProperty('background-image');
   element.replaceChildren();
-  element.style.backgroundImage = `url("${source.replaceAll('"', '%22')}")`;
-  element.style.backgroundSize = 'cover'; element.style.backgroundPosition = 'center';
+  if (!source) { showCoverFallback(element); return; }
+  element.classList.remove('missing-cover');
+  const image = document.createElement('img');
+  image.className = 'cover-image'; image.alt = ''; image.draggable = false; image.decoding = 'async';
+  image.addEventListener('error', () => {
+    if (element.querySelector('.cover-image') === image) showCoverFallback(element);
+  }, { once: true });
+  element.append(image);
+  image.src = source;
 }
 function renderFolderList() {
   const list = $('folderList'); list.replaceChildren();
@@ -501,6 +508,7 @@ function searchLibrary(query) {
 }
 function syncTransportStates() {
   const playing = Boolean(currentTrack && !audio.paused);
+  document.body.classList.toggle('audio-playing', playing);
   setPlayIcon($('playButton'), playing); setPlayIcon($('lyricsPlay'), playing);
   $('playButton').classList.toggle('active', playing);
   $('playButton').setAttribute('aria-pressed', String(playing));
@@ -691,13 +699,29 @@ function pausePlayback() { if (crossfadeActive) cancelCrossfade(); audio.pause()
 function updateTimeline() {
   const duration = Number(audio.duration) || 0;
   $('seek').max = duration || 100; $('seek').value = Math.min(audio.currentTime || 0, duration || 100);
-  $('elapsed').textContent = fmt(audio.currentTime); $('duration').textContent = fmt(duration);
   $('lyricsSeek').max = duration || 100; $('lyricsSeek').value = Math.min(audio.currentTime || 0, duration || 100);
+  const progress = Number($('seek').value) / Math.max(1, Number($('seek').max)) * 100;
+  const safeProgress = Math.max(0, Math.min(100, progress));
+  document.querySelectorAll('.seek-visualizer').forEach(track => {
+    track.style.setProperty('--seek-progress', safeProgress);
+    track.style.setProperty('--seek-percent', `${safeProgress}%`);
+  });
+  $('elapsed').textContent = fmt(audio.currentTime); $('duration').textContent = fmt(duration);
   $('lyricsElapsed').textContent = fmt(audio.currentTime); $('lyricsDuration').textContent = fmt(duration);
   updateLyricsHighlight();
 }
 function setLyricsStatus(message) { $('lyricsStatus').textContent = message; }
+function updateAutomaticLyricsControls() {
+  const available = Boolean(currentLyrics.lines.length) && !currentLyrics.synced;
+  $('lyricsAutoSyncButton').hidden = !available;
+  $('lyricsAutoSyncHelp').hidden = !available;
+  $('autoSyncLyricsMenuButton').disabled = !available;
+}
+window.isotopus.onLyricsAlignProgress?.(progress => {
+  if (progress?.id === lyricsTrackId && progress.message) setLyricsStatus(progress.message);
+});
 function showLyricsEmpty(message) {
+  $('lyricsAutoSyncButton').hidden = true; $('lyricsAutoSyncHelp').hidden = true; $('autoSyncLyricsMenuButton').disabled = true;
   $('lyricsLines').replaceChildren(); const empty = document.createElement('div'); empty.className = 'lyrics-empty'; empty.textContent = message; $('lyricsLines').append(empty);
 }
 function showLyricsActions() {
@@ -716,6 +740,7 @@ function applyLyricsText(raw, source = 'Letra adicionada') {
   $('markLyricsToggle').hidden = parsed.synced || !parsed.lines.length;
   setLyricsStatus(parsed.lines.length ? `${source} · ${parsed.synced ? 'sincronizada' : 'sem tempos'}` : 'Nenhuma letra encontrada.');
   renderLyricsLines();
+  updateAutomaticLyricsControls();
   updateManualSyncProgress();
   persistLyricsState();
 }
@@ -736,6 +761,7 @@ async function markLyricsLine(index) {
   if (marked === currentLyrics.lines.length) {
     currentLyrics.synced = true; currentLyrics.raw = window.IsotopusLyrics.formatLyrics(currentLyrics.lines);
     manualLyricsMode = false; $('markLyricsToggle').hidden = true;
+    updateAutomaticLyricsControls();
     $('markLyricsToggle').textContent = 'Marcar linhas durante a reprodução';
     setLyricsStatus('Sincronização concluída. Letra salva automaticamente neste computador.');
   } else setLyricsStatus(`Marcada a linha ${marked} de ${currentLyrics.lines.length}. Continue no próximo verso.`);
@@ -772,7 +798,6 @@ function updateLyricsHighlight(forceScroll = false) {
   const position = Math.max(0, audio.currentTime - offset);
   let next = -1;
   for (let i = 0; i < currentLyrics.lines.length; i++) if (currentLyrics.lines[i].time != null && currentLyrics.lines[i].time <= position) next = i;
-  if (next < 0) next = currentLyrics.lines.findIndex(line => line.time != null);
   const rows = $('lyricsLines').querySelectorAll('.lyrics-line');
   rows.forEach(row => row.classList.remove('active', 'lyrics-neighbor'));
   if (next >= 0) {
@@ -789,11 +814,13 @@ async function loadCurrentLyrics() {
   $('lyricsTrackTitle').textContent = currentTrack.title; $('lyricsTrackArtist').textContent = `${currentTrack.artist} · ${currentTrack.album}`;
   $('lyricsHeading').textContent = currentTrack.title; $('lyricsHeading').title = currentTrack.title; coverStyle(currentTrack, $('lyricsCover'));
   currentLyrics = { raw: '', synced: false, lines: [], source: '' }; manualLyricsMode = false;
+  updateAutomaticLyricsControls();
   $('lyricsSyncPanel').hidden = true; $('lyricsMenu').hidden = true;
   const saved = await window.isotopus.getLyricsState(currentTrack.id);
   if (lyricsTrackId !== currentTrack.id) return;
   if (saved?.lines?.length) {
     currentLyrics = { raw: String(saved.raw || ''), synced: Boolean(saved.synced), lines: saved.lines, source: 'Salva no Isótopus' };
+    updateAutomaticLyricsControls();
     $('lyricsOffset').value = Math.max(-10, Math.min(10, Number(saved.offset) || 0));
     $('lyricsOffsetValue').textContent = `${Number($('lyricsOffset').value).toFixed(1)} s`;
     $('markLyricsToggle').hidden = currentLyrics.synced;
@@ -803,8 +830,24 @@ async function loadCurrentLyrics() {
   showLyricsEmpty('Procurando uma letra local…'); setLyricsStatus('Verificando arquivo .lrc local');
   const result = await window.isotopus.getLocalLyrics(currentTrack.id);
   if (lyricsTrackId !== currentTrack.id) return;
-  if (result?.content) applyLyricsText(result.content, 'Arquivo local');
-  else { showLyricsEmpty('Nenhuma letra encontrada para esta faixa.'); showLyricsActions(); setLyricsStatus('Sem letra para esta faixa'); }
+  if (result?.content) {
+    applyLyricsText(result.content, 'Arquivo local');
+    if (!currentLyrics.synced) setLyricsStatus('Letra local sem tempos · você pode sincronizá-la automaticamente com o áudio.');
+    return;
+  }
+  setLyricsStatus('Buscando automaticamente uma letra sincronizada…');
+  const lookup = await window.isotopus.searchLyrics({ title: currentTrack.title, artist: currentTrack.artist, album: currentTrack.album, duration: currentTrack.duration });
+  if (lyricsTrackId !== currentTrack.id) return;
+  const best = lookup?.ok ? window.IsotopusLyrics.rankLyricsRecords(lookup.records, currentTrack)[0] : null;
+  if (best && best.score >= 0.68) {
+    const text = best.record.syncedLyrics || best.record.plainLyrics;
+    applyLyricsText(text, 'LRCLIB · busca automática');
+    if (currentLyrics.synced) setLyricsStatus('Letra sincronizada encontrada automaticamente no LRCLIB.');
+    else setLyricsStatus('Letra encontrada sem tempos · sincronize-a com o áudio usando o botão ✦.');
+    return;
+  }
+  showLyricsEmpty(lookup?.ok ? 'Não encontrei uma letra com correspondência segura para esta gravação.' : 'Não foi possível buscar a letra agora.');
+  showLyricsActions(); setLyricsStatus(lookup?.error || 'Nenhuma letra correspondente encontrada');
 }
 async function openLyricsScreen() {
   if (!currentTrack) { toast('Reproduza ou selecione uma faixa primeiro.'); return; }
@@ -841,6 +884,69 @@ async function searchLyricsOnline() {
   }
   if (!result.records.length) { const empty = document.createElement('div'); empty.className = 'empty-state'; empty.textContent = 'Nenhuma letra encontrada para esta faixa.'; list.append(empty); }
   $('lyricsSearchDialog').showModal(); setLyricsStatus(`${result.records.length} resultados do LRCLIB`);
+}
+async function decodeCurrentTrackForAlignment(track) {
+  if (!track?.streamUrl) throw new Error('Não encontrei o arquivo de áudio desta faixa.');
+  if (Number(track.duration) > 600) throw new Error('A sincronização automática aceita faixas de até 10 minutos nesta versão de teste.');
+  const response = await fetch(track.streamUrl, { cache: 'no-store' });
+  if (!response.ok) throw new Error('Não consegui abrir o arquivo de áudio local.');
+  const contentLength = Number(response.headers.get('content-length')) || 0;
+  if (contentLength > 160 * 1024 * 1024) throw new Error('Este arquivo é grande demais para a sincronização automática nesta versão de teste.');
+  const encodedAudio = await response.arrayBuffer();
+  if (encodedAudio.byteLength > 160 * 1024 * 1024) throw new Error('Este arquivo é grande demais para a sincronização automática nesta versão de teste.');
+  const decoder = new (window.AudioContext || window.webkitAudioContext)();
+  let decoded;
+  try { decoded = await decoder.decodeAudioData(encodedAudio.slice(0)); }
+  catch { throw new Error('Este formato não pôde ser decodificado para análise neste computador.'); }
+  finally { await decoder.close().catch(() => {}); }
+  if (decoded.duration > 600) throw new Error('A sincronização automática aceita faixas de até 10 minutos nesta versão de teste.');
+  const sampleRate = 16000, sampleCount = Math.ceil(decoded.duration * sampleRate);
+  const resampler = new OfflineAudioContext(1, sampleCount, sampleRate);
+  const source = resampler.createBufferSource(); source.buffer = decoded; source.connect(resampler.destination); source.start();
+  const mono = await resampler.startRendering();
+  return { samples: mono.getChannelData(0).slice(), duration: decoded.duration };
+}
+function confirmAutomaticLyricsSync() {
+  const dialog = $('lyricsAutoSyncConfirmDialog');
+  return new Promise(resolve => {
+    const finish = accepted => { if (dialog.open) dialog.close(); resolve(accepted); };
+    const onClose = () => { cleanup(); resolve(dialog.returnValue === 'proceed'); };
+    const cleanup = () => {
+      dialog.removeEventListener('close', onClose);
+      $('declineLyricsAutoSync').removeEventListener('click', decline);
+      $('acceptLyricsAutoSync').removeEventListener('click', accept);
+      $('closeLyricsAutoSyncConfirm').removeEventListener('click', decline);
+    };
+    const decline = () => { dialog.returnValue = 'cancel'; finish(false); };
+    const accept = () => { dialog.returnValue = 'proceed'; finish(true); };
+    dialog.addEventListener('close', onClose, { once: true });
+    $('declineLyricsAutoSync').addEventListener('click', decline, { once: true });
+    $('acceptLyricsAutoSync').addEventListener('click', accept, { once: true });
+    $('closeLyricsAutoSyncConfirm').addEventListener('click', decline, { once: true });
+    dialog.returnValue = 'cancel'; dialog.showModal();
+  });
+}
+async function runAutomaticLyricsSync() {
+  if (!currentTrack || !currentLyrics.lines.length || currentLyrics.synced) return;
+  if (!await confirmAutomaticLyricsSync()) return;
+  const trackId = currentTrack.id, button = $('lyricsAutoSyncButton');
+  $('lyricsMenu').hidden = true; button.disabled = true; button.textContent = 'Preparando áudio…';
+  setLyricsStatus('Preparando o áudio local para análise…');
+  try {
+    const decoded = await decodeCurrentTrackForAlignment(currentTrack);
+    if (lyricsTrackId !== trackId) return;
+    setLyricsStatus('Iniciando análise em segundo plano. Você pode continuar usando o Isótopus.');
+    const result = await window.isotopus.alignLyrics(trackId, decoded.samples, currentLyrics.lines.map(line => line.text), decoded.duration);
+    if (lyricsTrackId !== trackId) return;
+    if (!result?.ok) { setLyricsStatus(result?.error || 'Não foi possível sincronizar esta letra.'); return; }
+    const formatted = window.IsotopusLyrics.formatLyrics(result.lines);
+    applyLyricsText(formatted, 'Sincronizada automaticamente com o áudio local');
+    setLyricsStatus(`Sincronização estimada · ${result.matchedWords} de ${result.totalWords} palavras coincidiram. Confira os tempos.`);
+  } catch (error) {
+    if (lyricsTrackId === trackId) setLyricsStatus(error?.message || 'Não consegui sincronizar esta letra.');
+  } finally {
+    if (lyricsTrackId === trackId) { button.disabled = false; button.textContent = '✦ Sincronizar com áudio'; }
+  }
 }
 function openLyricsPasteDialog() {
   $('lyricsMenu').hidden = true;
@@ -892,6 +998,7 @@ function showSettings() {
   renderFolderDialog();
   setSettingsTab('general');
   setStyledSelect('themeSelect', store.get('theme') || 'system');
+  setStyledSelect('appScaleSelect', store.get('appScale') || '100');
   $('minimizeToTrayToggle').checked = store.get('minimizeToTray') === 'yes';
   $('crossfadeToggle').checked = crossfadeSeconds > 0;
   $('crossfadeSettings').hidden = crossfadeSeconds <= 0;
@@ -912,6 +1019,8 @@ $('editEqualizerButton').addEventListener('click', () => { setStyledSelect('equa
 $('equalizerDone').addEventListener('click', () => $('equalizerDialog').close());
 document.querySelectorAll('[data-settings-tab]').forEach(button => button.addEventListener('click', () => setSettingsTab(button.dataset.settingsTab)));
 bindStyledSelect('themeSelect', theme => { store.set('theme', theme); applyTheme(theme); });
+bindStyledSelect('appScaleSelect', value => { store.set('appScale', value); window.isotopus.setZoomFactor(Number(value) / 100); });
+window.isotopus.setZoomFactor(Number(store.get('appScale') || 100) / 100);
 bindStyledSelect('equalizerPreset', preset => {
   if (preset === 'custom') { equalizerState.preset = 'custom'; saveEqualizer(); updateEqualizerSummary(); return; }
   equalizerState.preset = preset; equalizerState.values = [...EQ_PRESETS[preset]]; renderEqualizer(); applyEqualizer(); saveEqualizer(); updateEqualizerSummary();
@@ -1029,6 +1138,8 @@ $('trackArt').addEventListener('click', openLyricsScreen);
 $('lyricsMinimize').addEventListener('click', minimizeLyricsScreen);
 $('lyricsMenuButton').addEventListener('click', () => { $('lyricsMenu').hidden = !$('lyricsMenu').hidden; });
 $('searchLyricsButton').addEventListener('click', searchLyricsOnline);
+$('lyricsAutoSyncButton').addEventListener('click', runAutomaticLyricsSync);
+$('autoSyncLyricsMenuButton').addEventListener('click', runAutomaticLyricsSync);
 $('pasteLyricsButton').addEventListener('click', openLyricsPasteDialog);
 $('searchWebLyricsButton').addEventListener('click', searchLyricsWeb);
 $('applyLyricsPaste').addEventListener('click', applyPastedLyrics);

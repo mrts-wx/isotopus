@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, screen, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, screen, Tray, Menu, nativeImage, utilityProcess } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const fsSync = require('node:fs');
@@ -6,6 +6,10 @@ const { randomUUID } = require('node:crypto');
 const { createStaticServer } = require('./server');
 const { createLibrary } = require('./library');
 const { buildM3u } = require('./playlist');
+const { formatLyrics } = require('./lyrics');
+
+const singleInstanceLock = app.requestSingleInstanceLock();
+let pendingSecondInstanceFocus = false;
 
 let server;
 let serverPort;
@@ -21,6 +25,9 @@ const watchers = [];
 let library;
 let lyricsRequestAt = 0;
 let lyricsRetryAt = 0;
+let lyricsSearchQueue = Promise.resolve();
+let lyricsAlignmentWorker = null;
+const lyricsSearchCache = new Map();
 
 function settingsPath() { return path.join(app.getPath('userData'), 'settings.json'); }
 async function loadSettings() {
@@ -45,7 +52,7 @@ function scheduleSettingsSave() {
   settingsSaveTimer = setTimeout(() => { settingsSaveTimer = null; saveSettings().catch(error => console.error('Could not save settings:', error)); }, 180);
   settingsSaveTimer.unref?.();
 }
-function showWindow() { if (win && !win.isDestroyed()) { win.show(); win.focus(); } }
+function showWindow() { if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); win.moveTop(); } }
 function syncTray() {
   const enabled = settings.store?.minimizeToTray === 'yes';
   if (enabled && !tray) {
@@ -100,6 +107,12 @@ function createWindow(port) {
     return { action: 'deny' };
   });
 }
+ipcMain.handle('window:setZoomFactor', (event, factor) => {
+  const zoom = Number(factor);
+  if (!Number.isFinite(zoom) || zoom < 1 || zoom > 1.75 || event.sender !== win?.webContents) return false;
+  win.webContents.setZoomFactor(zoom);
+  return true;
+});
 ipcMain.on('store:get', event => { event.returnValue = settings.store; });
 ipcMain.on('store:set', (event, { key, value }) => {
   if (typeof key !== 'string' || !/^[\w:.-]{1,120}$/.test(key) || typeof value !== 'string' || value.length > 1024 * 1024) return;
@@ -109,6 +122,21 @@ ipcMain.on('store:set', (event, { key, value }) => {
 });
 function validTrackId(id) { return typeof id === 'string' && /^[a-f0-9]{24}$/.test(id); }
 function lyricsStatePath(id) { return path.join(app.getPath('userData'), 'lyrics', `${id}.json`); }
+async function persistBackgroundLyrics(id, inputLines, result) {
+  if (!result?.ok || !validTrackId(id)) return;
+  try {
+    const file = lyricsStatePath(id);
+    const state = JSON.parse(await fs.readFile(file, 'utf8'));
+    if (state.synced || !Array.isArray(state.lines) || state.lines.length !== inputLines.length) return;
+    if (!state.lines.every((line, index) => line?.text === inputLines[index])) return;
+    const lines = result.lines.map(line => ({ text: line.text, time: line.time }));
+    const updated = JSON.stringify({ raw: formatLyrics(lines), synced: true, lines, offset: Math.max(-10, Math.min(10, Number(state.offset) || 0)) });
+    await fs.writeFile(`${file}.tmp`, updated, { mode: 0o600 });
+    await fs.rename(`${file}.tmp`, file);
+  } catch (error) {
+    console.error('Could not persist background lyric alignment:', error);
+  }
+}
 ipcMain.handle('lyrics:state:get', async (_event, id) => {
   if (!validTrackId(id)) return null;
   try {
@@ -129,6 +157,60 @@ ipcMain.handle('lyrics:state:set', async (_event, { id, state }) => {
   const file = lyricsStatePath(id); await fs.mkdir(path.dirname(file), { recursive: true });
   await fs.writeFile(`${file}.tmp`, data, { mode: 0o600 }); await fs.rename(`${file}.tmp`, file);
   return { ok: true };
+});
+ipcMain.handle('lyrics:align', async (event, payload) => {
+  const id = payload?.id;
+  const audioPath = library?.resolveTrackPath(id);
+  const samples = payload?.samples;
+  const lyrics = payload?.lines;
+  const duration = Number(payload?.duration) || 0;
+  if (!validTrackId(id) || !audioPath || !fsSync.existsSync(audioPath)) return { ok: false, error: 'A faixa não está mais disponível na biblioteca.' };
+  if (!(samples instanceof Float32Array) || samples.length < 16000 * 8 || samples.length > 16000 * 600) return { ok: false, error: 'O áudio precisa ter entre 8 segundos e 10 minutos para a sincronização automática.' };
+  if (!Array.isArray(lyrics) || lyrics.length < 2 || lyrics.length > 1200 || lyrics.some(line => typeof line !== 'string' || line.length > 1000)) return { ok: false, error: 'A letra não é válida para sincronização.' };
+  if (lyricsAlignmentWorker) return { ok: false, error: 'Já existe uma sincronização em segundo plano. Aguarde ela terminar antes de iniciar outra.' };
+
+  return new Promise(resolve => {
+    let settled = false;
+    const workerPath = app.isPackaged
+      ? path.join(process.resourcesPath, 'lyrics-worker.cjs')
+      : path.join(__dirname, 'lyrics-worker.cjs');
+    const worker = utilityProcess.fork(workerPath, [], {
+      serviceName: 'Isótopus Lyrics Synchronizer',
+      env: { ...process.env, ISOTOPUS_APP_PATH: app.getAppPath() }
+    });
+    lyricsAlignmentWorker = worker;
+    const finish = result => {
+      if (settled) return;
+      settled = true;
+      if (lyricsAlignmentWorker === worker) lyricsAlignmentWorker = null;
+      resolve(result);
+    };
+    worker.on('message', async message => {
+      if (!message || message.id !== id) return;
+      if (message.type === 'progress') {
+        if (!event.sender.isDestroyed()) event.sender.send('lyrics:align-progress', { id, phase: message.phase, message: message.message });
+      } else if (message.type === 'result') {
+        await persistBackgroundLyrics(id, lyrics, message.result);
+        finish(message.result);
+        worker.kill();
+      }
+    });
+    worker.on('error', error => {
+      console.error('Lyrics worker failed:', error);
+      finish({ ok: false, error: 'O processo de sincronização em segundo plano falhou. O Isótopus continua aberto; você pode tentar novamente.' });
+    });
+    worker.on('exit', code => {
+      if (lyricsAlignmentWorker === worker) lyricsAlignmentWorker = null;
+      if (!settled) finish({ ok: false, error: `O processo de sincronização em segundo plano foi encerrado (${code ?? 'sem código'}). O Isótopus continua aberto; tente uma faixa menor ou feche outros aplicativos e tente novamente.` });
+    });
+    try {
+      worker.postMessage({ id, samples, lines: lyrics, duration, cacheDir: path.join(app.getPath('userData'), 'models', 'transformers') });
+    } catch (error) {
+      console.error('Could not start lyrics worker:', error);
+      finish({ ok: false, error: 'Não consegui iniciar a sincronização em segundo plano.' });
+      worker.kill();
+    }
+  });
 });
 async function scanLibrary() {
   const tracks = await library.scan(settings.folders, `http://127.0.0.1:${serverPort}`);
@@ -216,11 +298,14 @@ ipcMain.handle('lyrics:save', async (_event, { id, content }) => {
   await fs.writeFile(file, content, { encoding: 'utf8', mode: 0o600 });
   return { ok: true, path: file };
 });
-ipcMain.handle('lyrics:search', async (_event, track) => {
+async function performLyricsSearch(track) {
   if (!track || typeof track.title !== 'string' || typeof track.artist !== 'string') return { ok: false, error: 'Metadados da faixa inválidos.' };
+  const cacheKey = [track.title, track.artist, track.album || '', Math.round(Number(track.duration) || 0)].join('|').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+  const cached = lyricsSearchCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < 30 * 60 * 1000) return cached.value;
   const now = Date.now();
   if (now < lyricsRetryAt) return { ok: false, error: 'Aguarde alguns segundos antes de buscar outra letra.' };
-  const delay = Math.max(0, 300 - (now - lyricsRequestAt));
+  const delay = Math.max(0, 1200 - (now - lyricsRequestAt));
   if (delay) await new Promise(resolve => setTimeout(resolve, delay));
   lyricsRequestAt = Date.now();
   const params = new URLSearchParams({ track_name: track.title.slice(0, 256), artist_name: track.artist.slice(0, 256) });
@@ -229,7 +314,7 @@ ipcMain.handle('lyrics:search', async (_event, track) => {
   const timeout = setTimeout(() => controller.abort(), 12000);
   try {
     const response = await fetch(`https://lrclib.net/api/search?${params}`, {
-      headers: { 'User-Agent': 'Isotopus/0.1.3 (https://github.com/)', 'Accept': 'application/json' }, signal: controller.signal
+      headers: { 'User-Agent': 'Isotopus/0.2.0 (https://github.com/mrts-wx/isotopus)', 'Accept': 'application/json' }, signal: controller.signal
     });
     if (response.status === 429) {
       const retryAfter = response.headers.get('retry-after');
@@ -242,15 +327,23 @@ ipcMain.handle('lyrics:search', async (_event, track) => {
     if (!Array.isArray(records)) return { ok: false, error: 'Resposta inesperada do serviço de letras.' };
     const duration = Number(track.duration) || 0;
     records.sort((a, b) => Math.abs((Number(a.duration) || 0) - duration) - Math.abs((Number(b.duration) || 0) - duration));
-    return { ok: true, records: records.slice(0, 12).map(record => ({
+    const value = { ok: true, records: records.slice(0, 12).map(record => ({
       title: String(record.trackName || record.name || '').slice(0, 256), artist: String(record.artistName || '').slice(0, 256),
       album: String(record.albumName || '').slice(0, 256), duration: Number(record.duration) || 0,
       plainLyrics: String(record.plainLyrics || '').slice(0, 100000), syncedLyrics: String(record.syncedLyrics || '').slice(0, 100000),
       instrumental: Boolean(record.instrumental)
     })) };
+    lyricsSearchCache.set(cacheKey, { at: Date.now(), value });
+    if (lyricsSearchCache.size > 200) lyricsSearchCache.delete(lyricsSearchCache.keys().next().value);
+    return value;
   } catch (error) {
     return { ok: false, error: error.name === 'AbortError' ? 'A busca de letras demorou demais.' : 'Não consegui acessar o serviço de letras.' };
   } finally { clearTimeout(timeout); }
+}
+ipcMain.handle('lyrics:search', (_event, track) => {
+  const queued = lyricsSearchQueue.then(() => performLyricsSearch(track));
+  lyricsSearchQueue = queued.catch(() => {});
+  return queued;
 });
 ipcMain.handle('lyrics:webSearch', async (_event, track) => {
   if (!track || typeof track.title !== 'string') return { ok: false, error: 'Faixa inválida.' };
@@ -261,27 +354,36 @@ ipcMain.handle('lyrics:webSearch', async (_event, track) => {
   catch { return { ok: false, error: 'Não consegui abrir o navegador.' }; }
 });
 
-app.whenReady().then(async () => {
-  await loadSettings();
-  syncTray();
-  library = createLibrary(path.join(app.getPath('userData'), 'library-cache'));
-  const port = await serveApp();
-  createWindow(port);
-  watchFolders();
-  scanLibrary().catch(error => console.error('Library scan failed:', error));
-});
-app.on('window-all-closed', async () => {
-  clearTimeout(scanTimer);
-  while (watchers.length) watchers.pop().close();
-  if (server) server.close();
-  if (process.platform !== 'darwin') app.quit();
-});
-let quitAfterSettingsSave = false;
-app.on('before-quit', event => {
-  isQuitting = true;
-  if ((settingsDirty || settingsSaveTimer) && !quitAfterSettingsSave) {
-    event.preventDefault(); quitAfterSettingsSave = true; clearTimeout(settingsSaveTimer); settingsSaveTimer = null;
-    saveSettings().finally(() => app.quit());
-  }
-});
-app.on('activate', showWindow);
+if (singleInstanceLock) {
+  app.on('second-instance', () => {
+    pendingSecondInstanceFocus = true;
+    if (win && !win.isDestroyed()) showWindow();
+  });
+  app.whenReady().then(async () => {
+    await loadSettings();
+    syncTray();
+    library = createLibrary(path.join(app.getPath('userData'), 'library-cache'));
+    const port = await serveApp();
+    createWindow(port);
+    if (pendingSecondInstanceFocus) showWindow();
+    watchFolders();
+    scanLibrary().catch(error => console.error('Library scan failed:', error));
+  });
+  app.on('window-all-closed', async () => {
+    clearTimeout(scanTimer);
+    while (watchers.length) watchers.pop().close();
+    if (server) server.close();
+    if (process.platform !== 'darwin') app.quit();
+  });
+  let quitAfterSettingsSave = false;
+  app.on('before-quit', event => {
+    isQuitting = true;
+    if ((settingsDirty || settingsSaveTimer) && !quitAfterSettingsSave) {
+      event.preventDefault(); quitAfterSettingsSave = true; clearTimeout(settingsSaveTimer); settingsSaveTimer = null;
+      saveSettings().finally(() => app.quit());
+    }
+  });
+  app.on('activate', showWindow);
+} else {
+  app.quit();
+}

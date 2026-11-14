@@ -8,7 +8,7 @@ const { createStaticServer } = require('../server');
 const { createLibrary } = require('../library');
 const { buildM3u } = require('../playlist');
 const { shuffleTracks } = require('../shuffle');
-const { parseLyrics, formatLyrics } = require('../lyrics');
+const { parseLyrics, formatLyrics, rankLyricsRecords, alignLyricsToTranscript } = require('../lyrics');
 const { repairFlacPictureMime } = require('../flac');
 
 const root = path.resolve(__dirname, '..');
@@ -144,6 +144,37 @@ test('LRC parser handles multiple timestamps and applies manual timing offsets',
   assert.equal(plain.lines.length, 2);
 });
 
+test('automatic lyric search ranks close synced records above mismatched tracks', () => {
+  const ranked = rankLyricsRecords([
+    { title: 'Outro Som', artist: 'Artista B', duration: 210, syncedLyrics: '[00:01.00] X' },
+    { title: 'Canção do Teste', artist: 'Artista A', duration: 201, plainLyrics: 'letra sem tempos' },
+    { title: 'Canção do Teste', artist: 'Artista A', duration: 200, syncedLyrics: '[00:01.00] letra' }
+  ], { title: 'Canção do Teste', artist: 'Artista A', duration: 200, album: '' });
+  assert.equal(ranked[0].record.duration, 200);
+  assert.ok(ranked[0].score >= 0.68);
+  assert.equal(ranked[2].score < ranked[0].score, true);
+});
+
+test('automatic lyric alignment maps a local transcript to monotonic LRC line starts', () => {
+  const lines = ['Olá, mundo', 'meu amigo', 'vamos cantar', 'mais uma vez', 'fim da noite'].map(text => ({ text }));
+  const transcript = ['ola', 'mundo', 'meu', 'amigo', 'vamos', 'cantar', 'mais', 'uma', 'vez', 'fim', 'da', 'noite']
+    .map((text, index) => ({ text: `${text} `, timestamp: [index * 0.7 + 1, index * 0.7 + 1.3] }));
+  const result = alignLyricsToTranscript(lines, transcript, 12);
+  assert.equal(result.ok, true);
+  assert.equal(result.matchedLines, 5);
+  assert.equal(result.coverage, 1);
+  assert.deepEqual(result.lines.map(line => line.text), lines.map(line => line.text));
+  assert.ok(result.lines.every((line, index, all) => line.time >= 0 && (index === 0 || line.time >= all[index - 1].time)));
+  assert.equal(parseLyrics(formatLyrics(result.lines)).synced, true);
+});
+
+test('automatic lyric alignment refuses unrelated speech instead of inventing line timing', () => {
+  const lines = ['letra correta aqui', 'mais uma linha conhecida', 'refrão da canção'].map(text => ({ text }));
+  const transcript = ['janela', 'computador', 'teclado', 'cadeira', 'telefone', 'relógio']
+    .map((text, index) => ({ text, timestamp: [index * 1.2, index * 1.2 + 0.4] }));
+  assert.equal(alignLyricsToTranscript(lines, transcript, 10).ok, false);
+});
+
 test('Electron bridge stays isolated and exposes only required local actions', () => {
   const main = read('main.js');
   const preload = read('preload.js');
@@ -200,6 +231,10 @@ test('playlists, full-screen lyrics, and the Isótopus no-cover mark are include
   assert.match(html, /id="lyricsScreen"/);
   assert.match(html, /id="lyricsMinimize"/);
   assert.match(app, /Pesquisar letra na web/);
+  assert.match(app, /Buscando automaticamente uma letra sincronizada/);
+  assert.match(app, /alignLyrics\(trackId, decoded\.samples/);
+  assert.match(html, /id="lyricsAutoSyncButton"/);
+  assert.match(html, /id="autoSyncLyricsMenuButton"/);
   assert.match(html, /id="lyricsPasteDialog"/);
   assert.match(html, /id="lyricsPasteText"/);
   assert.match(html, /id="searchWebLyricsButton"/);
@@ -213,7 +248,7 @@ test('playlists, full-screen lyrics, and the Isótopus no-cover mark are include
   for (const file of ['lyrics.js', 'shuffle.js', 'flac.js', 'lyrics.css', 'clarity.css', 'features.css', 'home-player.css', 'no-cover.svg', 'build/icons/**']) assert.ok(pkg.build.files.includes(file));
 });
 
-test('v0.1.9 fixes the equalizer editor, enriches the home screen, and polishes settings', () => {
+test('v0.2.0 preserves the player features and adds local automatic lyric alignment', () => {
   const html = read('index.html');
   const app = read('app.js');
   const main = read('main.js');
@@ -307,7 +342,8 @@ test('desktop identity, app clarity, and launcher icon are configured', () => {
   const pkg = JSON.parse(read('package.json'));
   const app = read('app.js');
   assert.equal(pkg.name, 'isotopus');
-  assert.equal(pkg.version, '0.1.9');
+  assert.equal(pkg.version, '0.2.0');
+  assert.equal(pkg.dependencies['@huggingface/transformers'], '^3.8.1');
   assert.equal(pkg.scripts['build:debian'], 'electron-builder --linux deb');
   assert.equal(pkg.scripts['build:arch'], 'electron-builder --linux pacman');
   assert.equal(pkg.scripts['build:windows'], 'electron-builder --win nsis');

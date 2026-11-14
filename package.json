@@ -1,25 +1,26 @@
 {
   "name": "isotopus",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "private": true,
   "author": {
     "name": "Local Build",
     "email": "local@localhost"
   },
-  "homepage": "https://github.com/",
   "desktopName": "com.isotopus.musicplayer",
-  "description": "Player de música local para Ubuntu com playlists e letras sincronizadas",
+  "description": "Player local de música com playlists e letras sincronizadas, incluindo alinhamento automático",
+  "homepage": "https://github.com/mrts-wx/isotopus",
   "license": "UNLICENSED",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
+    "start": "node scripts/patch-transformers-electron.js && electron .",
     "test": "node --test",
-    "build:ubuntu": "electron-builder --linux deb",
-    "build:debian": "electron-builder --linux deb",
-    "build:arch": "electron-builder --linux pacman",
-    "build:windows": "electron-builder --win nsis"
+    "build:ubuntu": "node scripts/patch-transformers-electron.js && electron-builder --linux deb",
+    "build:debian": "node scripts/patch-transformers-electron.js && electron-builder --linux deb",
+    "build:arch": "node scripts/patch-transformers-electron.js && electron-builder --linux pacman",
+    "build:windows": "node scripts/patch-transformers-electron.js && electron-builder --win nsis"
   },
   "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
     "music-metadata": "^11.13.0"
   },
   "devDependencies": {
@@ -29,8 +30,15 @@
   "build": {
     "appId": "com.isotopus.musicplayer",
     "productName": "Isótopus",
+    "extraResources": [
+      {
+        "from": "lyrics-worker.cjs",
+        "to": "lyrics-worker.cjs"
+      }
+    ],
     "files": [
       "main.js",
+      "sharp-stub.mjs",
       "preload.js",
       "server.js",
       "flac.js",
@@ -53,7 +61,11 @@
       "build/icons/**",
       "README.md",
       "package.json",
-      "node_modules/**"
+      "node_modules/**",
+      "!node_modules/sharp/**",
+      "!node_modules/@img/sharp-*/**",
+      "!node_modules/onnxruntime-node/bin/napi-v3/linux/x64/libonnxruntime_providers_cuda.so",
+      "!node_modules/onnxruntime-node/bin/napi-v3/linux/x64/libonnxruntime_providers_tensorrt.so"
     ],
     "linux": {
       "target": [
@@ -65,7 +77,9 @@
       "artifactName": "Isotopus-${version}-${arch}.${ext}"
     },
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "icon": "build/icons/isotopus.ico",
       "artifactName": "Isotopus-${version}-setup-${arch}.${ext}"
     },

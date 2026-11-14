@@ -7,7 +7,9 @@ Player de música local para Linux e Windows, feito para organizar e ouvir uma c
 - Reprodução local de FLAC, WAV, AIFF, M4A/ALAC, MP3, AAC, Ogg e Opus, conforme o suporte do Electron e do sistema.
 - Biblioteca monitorada, playlists, busca, favoritos e fila de reprodução.
 - Letras LRC e sincronização manual por faixa.
-- Temas claro, escuro e automático, além de equalizador com perfis.
+- Busca automática de letras no LRCLIB e sincronização estimada de letras sem tempos com o áudio local.
+- Temas claro, escuro e automático, escala de interface ajustável entre 100% e 175%, além de equalizador com perfis.
+- Marcador do player animado durante a reprodução, com suporte à preferência por movimento reduzido.
 - Pacotes de distribuição para Debian/Ubuntu, Arch e Windows.
 
 O app identifica o codec armazenado, mas não consegue verificar se um arquivo lossless veio de uma fonte sem perdas. A saída de áudio também pode ser mixada ou reamostrada pelo sistema operacional.
@@ -42,7 +44,7 @@ Os arquivos gerados ficam em `dist/`. As configurações de build e ícones fica
 
 ## Builds publicadas
 
-Os instaladores históricos e atuais estão organizados em `release-assets/`, por versão (`v0.1.0` a `v0.1.9`). Eles são mantidos fora dos commits e enviados como anexos de Releases do GitHub, inclusive porque alguns arquivos ultrapassam o limite de tamanho de arquivos comuns do Git.
+Os instaladores históricos e atuais estão organizados em `release-assets/`, por versão (`v0.1.0` a `v0.2.0`). Eles são mantidos fora dos commits e enviados como anexos de Releases do GitHub, inclusive porque alguns arquivos ultrapassam o limite de tamanho de arquivos comuns do Git.
 
 Consulte [PUBLISHING.md](PUBLISHING.md) para criar o repositório, enviar o código e publicar os instaladores. Para incluir builds futuras, copie os arquivos para a pasta da versão correspondente em `release-assets/` e execute `scripts/publish-releases.sh`.
 
@@ -54,7 +56,7 @@ Baixe o instalador da versão desejada na página **Releases** do repositório e
 - **Debian ou Ubuntu:** baixe `Isotopus-<versão>-amd64.deb`, abra um terminal na pasta do download e rode `sudo apt install ./Isotopus-<versão>-amd64.deb`. O `apt` instala o pacote e tenta resolver as dependências.
 - **Arch Linux:** baixe `Isotopus-<versão>-x64.pacman` e rode `sudo pacman -U ./Isotopus-<versão>-x64.pacman` no terminal, dentro da pasta do download.
 
-Substitua `<versão>` pelo número publicado, como `0.1.9`. Nem toda versão tem instalador para todos os sistemas; use um arquivo que esteja anexado à Release daquela versão. O [CHANGELOG](CHANGELOG.md) resume as mudanças da versão mais recente; cada Release também apresenta as notas daquela versão.
+Substitua `<versão>` pelo número publicado, como `0.2.0`. Nem toda versão tem instalador para todos os sistemas; use um arquivo que esteja anexado à Release daquela versão. O [CHANGELOG](CHANGELOG.md) resume as mudanças da versão mais recente; cada Release também apresenta as notas daquela versão.
 
 ### Sobre avisos de segurança
 
@@ -63,6 +65,12 @@ Estas builds de teste podem não ter assinatura digital de editor. No Windows, o
 No Linux, o sistema pode pedir sua senha para instalar o pacote. Esse pedido é esperado para uma instalação do sistema; confira o nome do pacote e a versão no comando antes de confirmar. Se houver erro de dependência, use o gerenciador de pacotes indicado acima e não tente contornar o aviso removendo proteções do sistema.
 
 O player mantém a biblioteca e a reprodução no computador. Quando você solicita uma busca de letra, metadados da faixa podem ser enviados ao [LRCLIB](https://lrclib.net/docs); buscas manuais abrem o navegador com título e artista para pesquisa.
+
+### Sincronização automática de letras (teste)
+
+Ao abrir a tela de letras, o Isótopus tenta encontrar uma letra correspondente no LRCLIB, priorizando a gravação com título, artista e duração mais próximos. Se encontrar uma letra já sincronizada, ela aparece automaticamente. Se encontrar somente texto sem tempos — ou se você abrir uma letra local — use **Sincronizar com áudio** para criar uma estimativa de tempos.
+
+Na primeira sincronização, o app baixa o modelo Whisper small quantizado e guarda os arquivos no perfil local. O áudio e o texto são analisados no próprio computador e não são enviados para um serviço de reconhecimento. O processamento pode levar alguns minutos e os tempos podem precisar de correção, especialmente em gravações com vocais sobrepostos, palavras pouco inteligíveis ou diferenças entre a letra publicada e a gravação. A sincronização automática aceita faixas de até 10 minutos e arquivos de até 160 MB. A marcação manual continua disponível; o resultado estimado fica salvo nas preferências locais do Isótopus e pode ser exportado como `.lrc` junto da música.
 
 ## Licença
 
