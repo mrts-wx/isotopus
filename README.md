@@ -10,7 +10,9 @@ O Isótopus classifica o codec armazenado. Ele não consegue confirmar se um FLA
 
 ## Playlists e letras
 
-Crie playlists locais no painel lateral e adicione faixas pelo botão `＋` dos cards. A fila pode ser exportada como M3U8. Clique na capa do player para abrir a tela de reprodução com letras: o Isótopus lê um `.lrc` ao lado da música, abre arquivos `.lrc`/`.txt`, busca faixas sob demanda no [LRCLIB](https://lrclib.net/docs) e permite ajustar o offset ou marcar cada linha no tempo atual. Se a busca não encontrar a letra, pesquise no navegador, copie o texto e cole no campo do app. Tempos no formato LRC são detectados automaticamente; texto simples pode ser sincronizado linha por linha. Letras podem ser salvas como `.lrc` junto da faixa.
+Crie playlists locais no painel lateral e adicione faixas pelo botão `＋` dos cards. A fila abre para cima pelo botão de lista no player e pode ser exportada como M3U8. Clique na capa do player para abrir a tela de reprodução com letras: o Isótopus lê um `.lrc` ao lado da música, abre arquivos `.lrc`/`.txt`, busca faixas sob demanda no [LRCLIB](https://lrclib.net/docs) e permite ajustar o offset ou marcar cada linha no tempo atual. Letras aceitas e tempos manuais ficam salvos no perfil local do app e continuam disponíveis depois de reiniciar. Se a busca não encontrar a letra, pesquise no navegador, copie o texto e cole no campo do app. Tempos no formato LRC são detectados automaticamente; texto simples pode ser sincronizado linha por linha. Letras também podem ser exportadas como `.lrc` junto da faixa.
+
+O tema noturno e as preferências de reprodução são salvos localmente. A opção **Minimizar para a bandeja** mantém o app aberto quando sua janela é fechada, desde que o ambiente Ubuntu ofereça uma bandeja do sistema. A **Transição suave** opcional mistura o fim de uma faixa com o início da próxima por 2 a 8 segundos; ela não altera o andamento nem tenta sincronizar batidas.
 
 ## Executar
 

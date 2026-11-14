@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, screen, Tray, Menu, nativeImage } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const fsSync = require('node:fs');
@@ -10,8 +10,13 @@ const { buildM3u } = require('./playlist');
 let server;
 let serverPort;
 let win;
-let settings = { folders: [] };
+let tray;
+let isQuitting = false;
+let settings = { folders: [], store: {} };
 let scanTimer;
+let settingsSaveQueue = Promise.resolve();
+let settingsSaveTimer;
+let settingsDirty = false;
 const watchers = [];
 let library;
 let lyricsRequestAt = 0;
@@ -22,11 +27,48 @@ async function loadSettings() {
   try {
     const stored = JSON.parse(await fs.readFile(settingsPath(), 'utf8'));
     settings.folders = Array.isArray(stored.folders) ? stored.folders.filter(folder => typeof folder === 'string') : [];
+    settings.store = stored.store && typeof stored.store === 'object' && !Array.isArray(stored.store) ? stored.store : {};
   } catch { settings.folders = []; }
 }
 async function saveSettings() {
-  await fs.mkdir(app.getPath('userData'), { recursive: true });
-  await fs.writeFile(settingsPath(), JSON.stringify({ folders: settings.folders }, null, 2), { mode: 0o600 });
+  settingsSaveQueue = settingsSaveQueue.catch(() => {}).then(async () => {
+    await fs.mkdir(app.getPath('userData'), { recursive: true });
+    const file = settingsPath(); const temp = `${file}.tmp`;
+    await fs.writeFile(temp, JSON.stringify({ folders: settings.folders, store: settings.store }, null, 2), { mode: 0o600 });
+    await fs.rename(temp, file);
+    settingsDirty = false;
+  });
+  return settingsSaveQueue;
+}
+function scheduleSettingsSave() {
+  settingsDirty = true; clearTimeout(settingsSaveTimer);
+  settingsSaveTimer = setTimeout(() => { settingsSaveTimer = null; saveSettings().catch(error => console.error('Could not save settings:', error)); }, 180);
+  settingsSaveTimer.unref?.();
+}
+function showWindow() { if (win && !win.isDestroyed()) { win.show(); win.focus(); } }
+function syncTray() {
+  const enabled = settings.store?.minimizeToTray === 'yes';
+  if (enabled && !tray) {
+    const iconPath = path.join(__dirname, 'build/icons/32x32.png');
+    try {
+      const image = nativeImage.createFromPath(iconPath);
+      if (image.isEmpty()) throw new Error('Tray icon could not be loaded');
+      tray = new Tray(image);
+      tray.setToolTip('Isótopus');
+      tray.setContextMenu(Menu.buildFromTemplate([
+        { label: 'Mostrar Isótopus', click: showWindow },
+        { type: 'separator' },
+        { label: 'Sair', click: () => { isQuitting = true; app.quit(); } }
+      ]));
+      tray.on('click', showWindow);
+    } catch (error) {
+      console.error('System tray is unavailable:', error);
+      tray = null; delete settings.store.minimizeToTray;
+      saveSettings().catch(() => {});
+      return false;
+    }
+  } else if (!enabled && tray) { tray.destroy(); tray = null; }
+  return !enabled || Boolean(tray);
 }
 function serveApp() {
   server = createStaticServer(__dirname, id => library.resolveAsset(id));
@@ -37,7 +79,7 @@ function serveApp() {
 }
 function createWindow(port) {
   const { width: workWidth, height: workHeight } = screen.getPrimaryDisplay().workAreaSize;
-  const minWidth = Math.min(1040, workWidth), minHeight = Math.min(700, workHeight);
+  const minWidth = Math.min(760, workWidth), minHeight = Math.min(560, workHeight);
   win = new BrowserWindow({
     width: Math.min(1600, Math.max(minWidth, Math.floor(workWidth * .96))),
     height: Math.min(1000, Math.max(minHeight, Math.floor(workHeight * .92))),
@@ -47,6 +89,9 @@ function createWindow(port) {
   });
   win.loadURL(`http://127.0.0.1:${port}`);
   win.setMenuBarVisibility(false);
+  win.on('close', event => {
+    if (!isQuitting && tray && settings.store?.minimizeToTray === 'yes') { event.preventDefault(); win.hide(); }
+  });
   win.webContents.setWindowOpenHandler(({ url }) => {
     let parsed;
     try { parsed = new URL(url); } catch { return { action: 'deny' }; }
@@ -54,6 +99,36 @@ function createWindow(port) {
     return { action: 'deny' };
   });
 }
+ipcMain.on('store:get', event => { event.returnValue = settings.store; });
+ipcMain.on('store:set', (event, { key, value }) => {
+  if (typeof key !== 'string' || !/^[\w:.-]{1,120}$/.test(key) || typeof value !== 'string' || value.length > 1024 * 1024) return;
+  if (value) settings.store[key] = value; else delete settings.store[key];
+  if (key === 'minimizeToTray' && !syncTray()) event.sender.send('tray:unavailable');
+  scheduleSettingsSave();
+});
+function validTrackId(id) { return typeof id === 'string' && /^[a-f0-9]{24}$/.test(id); }
+function lyricsStatePath(id) { return path.join(app.getPath('userData'), 'lyrics', `${id}.json`); }
+ipcMain.handle('lyrics:state:get', async (_event, id) => {
+  if (!validTrackId(id)) return null;
+  try {
+    const raw = await fs.readFile(lyricsStatePath(id), 'utf8');
+    if (Buffer.byteLength(raw, 'utf8') > 1024 * 1024) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
+});
+ipcMain.handle('lyrics:state:set', async (_event, { id, state }) => {
+  if (!validTrackId(id) || !state || typeof state.raw !== 'string' || Buffer.byteLength(state.raw, 'utf8') > 800000 || !Array.isArray(state.lines) || state.lines.length > 5000) return { ok: false };
+  const lines = [];
+  for (const line of state.lines) {
+    if (!line || typeof line.text !== 'string' || line.text.length > 10000 || !(line.time == null || (Number.isFinite(line.time) && line.time >= 0 && line.time <= 86400))) return { ok: false };
+    lines.push({ text: line.text, time: line.time == null ? null : line.time });
+  }
+  const data = JSON.stringify({ raw: state.raw, synced: Boolean(state.synced), lines, offset: Math.max(-10, Math.min(10, Number(state.offset) || 0)) });
+  if (Buffer.byteLength(data, 'utf8') > 1024 * 1024) return { ok: false, error: 'A letra passa de 1 MB.' };
+  const file = lyricsStatePath(id); await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(`${file}.tmp`, data, { mode: 0o600 }); await fs.rename(`${file}.tmp`, file);
+  return { ok: true };
+});
 async function scanLibrary() {
   const tracks = await library.scan(settings.folders, `http://127.0.0.1:${serverPort}`);
   if (win && !win.isDestroyed()) win.webContents.send('library:updated', { tracks, folders: settings.folders });
@@ -187,6 +262,7 @@ ipcMain.handle('lyrics:webSearch', async (_event, track) => {
 
 app.whenReady().then(async () => {
   await loadSettings();
+  syncTray();
   library = createLibrary(path.join(app.getPath('userData'), 'library-cache'));
   const port = await serveApp();
   createWindow(port);
@@ -199,3 +275,12 @@ app.on('window-all-closed', async () => {
   if (server) server.close();
   if (process.platform !== 'darwin') app.quit();
 });
+let quitAfterSettingsSave = false;
+app.on('before-quit', event => {
+  isQuitting = true;
+  if ((settingsDirty || settingsSaveTimer) && !quitAfterSettingsSave) {
+    event.preventDefault(); quitAfterSettingsSave = true; clearTimeout(settingsSaveTimer); settingsSaveTimer = null;
+    saveSettings().finally(() => app.quit());
+  }
+});
+app.on('activate', showWindow);

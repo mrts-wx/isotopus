@@ -11,6 +11,11 @@ contextBridge.exposeInMainWorld('isotopus', {
   saveLyrics: (id, content) => ipcRenderer.invoke('lyrics:save', { id, content }),
   searchLyrics: track => ipcRenderer.invoke('lyrics:search', track),
   searchLyricsWeb: track => ipcRenderer.invoke('lyrics:webSearch', track),
+  getLyricsState: id => ipcRenderer.invoke('lyrics:state:get', id),
+  saveLyricsState: (id, state) => ipcRenderer.invoke('lyrics:state:set', { id, state }),
+  getPersistentStore: () => ipcRenderer.sendSync('store:get'),
+  setPersistentStore: (key, value) => ipcRenderer.send('store:set', { key, value }),
+  onTrayUnavailable: callback => ipcRenderer.on('tray:unavailable', callback),
   onLibraryUpdated: callback => {
     const listener = (_event, data) => callback(data);
     ipcRenderer.on('library:updated', listener);
