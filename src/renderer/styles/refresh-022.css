@@ -22,3 +22,9 @@ body,.main-area{background:var(--fresh-bg);color:var(--fresh-text)}
 .download-tutorials{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin-top:19px}.download-tutorial{display:flex;gap:13px;min-height:143px;padding:17px;border:1px solid var(--fresh-line);border-radius:18px;background:var(--fresh-surface);box-shadow:0 7px 24px #31261a08}.tutorial-number{display:grid;place-items:center;width:32px;height:32px;flex:none;border-radius:11px;background:color-mix(in srgb,var(--fresh-green) 22%,var(--fresh-surface));color:var(--fresh-text);font:700 10px Manrope}.download-tutorial h3{margin:3px 0 7px;color:var(--fresh-text);font:600 14px Manrope}.download-tutorial p{margin:0;color:var(--fresh-muted);font-size:11px;line-height:1.55}.download-tutorial small{display:block;margin-top:9px;color:var(--fresh-accent);font-size:9px}.download-rights-note{max-width:850px;margin:15px auto;color:var(--fresh-muted);font-size:10px;line-height:1.6;text-align:center}
 @media(max-width:900px){.content{padding:20px 24px 55px}.topbar{padding-inline:24px}.download-tutorials{grid-template-columns:1fr}.download-tutorial{min-height:0}.download-options{align-items:flex-start;flex-direction:column}.download-options select{max-width:70vw}}
 @media(max-width:600px){.downloads-intro{padding-top:10px}.downloads-note-disc{width:58px;height:58px}.download-panel{padding:12px}.download-url-bar{flex-wrap:wrap}.download-url-bar input{flex:1 1 calc(100% - 45px);height:42px}.download-url-bar .primary-button{width:100%}.update-banner{flex-wrap:wrap}.update-banner .secondary-button{margin-left:45px}.content{padding-inline:16px}}
+
+/* Full player lyrics: keep the text scrollable without showing native bars. */
+.lyrics-scroll{min-width:0;overflow-x:hidden;overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none}
+.lyrics-scroll::-webkit-scrollbar{display:none;width:0;height:0}
+.lyrics-lines{min-width:0}
+.lyrics-line{overflow-wrap:anywhere}

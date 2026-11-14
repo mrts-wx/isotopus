@@ -23,6 +23,7 @@ Ao iniciar, o Isótopus verifica se há uma versão mais recente e apresenta o i
 ## Renovação visual
 
 A navegação, os cartões, a hierarquia tipográfica e os espaços foram renovados, mantendo os cantos arredondados e a identidade do Isótopus. A navegação lateral não mostra barras de rolagem; em janelas baixas, ela ainda pode ser percorrida por gesto.
+No player full, as letras continuam rolando por gesto ou roda do mouse sem exibir barras de rolagem verticais ou horizontais; linhas longas se ajustam à largura disponível.
 
 ## Instaladores 0.2.2
 
