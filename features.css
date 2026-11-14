@@ -141,3 +141,8 @@ body.audio-playing .seek-visualizer>input[type=range]::-webkit-slider-thumb{heig
 .lyrics-confirm-dialog .dialog-actions{margin-top:20px}
 .lyrics-confirm-dialog .dialog-actions .secondary-button,.lyrics-confirm-dialog .dialog-actions .primary-button{min-width:120px}
 @media(max-width:480px){.lyrics-confirm-dialog .dialog-actions{flex-direction:column-reverse}.lyrics-confirm-dialog .dialog-actions button{width:100%}}
+
+/* Keep the seek marker above the decorative progress line. */
+.seek-visualizer>svg{z-index:0!important}
+.seek-visualizer>input[type=range]{z-index:4!important}
+.seek-visualizer>input[type=range]::-webkit-slider-thumb{position:relative;z-index:1}

@@ -37,12 +37,13 @@ let playlistPendingTrackId = '';
 let currentLyrics = { raw: '', synced: false, lines: [], source: '' };
 let lyricsTrackId = '';
 let manualLyricsMode = false;
+let manualRedoPending = false;
 let activeLyricIndex = -1;
 let shuffled = false;
 let repeatMode = 0;
 let toastTimer;
 let searchTimer;
-const PAGE_SIZE = 120;
+const PAGE_SIZE = 48;
 const titles = { listen: 'Ouvir agora', songs: 'Faixas', artists: 'Artistas', favorites: 'Favoritas', playlists: 'Playlists' };
 const safeArray = key => { try { return JSON.parse(store.get(key) || '[]'); } catch { return []; } };
 const normalizeSearch = value => String(value || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('pt-BR').trim();
@@ -202,6 +203,8 @@ function coverStyle(track, element) {
   element.classList.remove('missing-cover');
   const image = document.createElement('img');
   image.className = 'cover-image'; image.alt = ''; image.draggable = false; image.decoding = 'async';
+  const isPlayerCover = element.id === 'trackArt';
+  image.loading = isPlayerCover ? 'eager' : 'lazy'; image.fetchPriority = isPlayerCover ? 'high' : 'low';
   image.addEventListener('error', () => {
     if (element.querySelector('.cover-image') === image) showCoverFallback(element);
   }, { once: true });
@@ -737,7 +740,8 @@ function applyLyricsText(raw, source = 'Letra adicionada') {
   const savedOffset = Number(store.get(`lyricsOffset:${lyricsTrackId}`));
   $('lyricsOffset').value = Number.isFinite(savedOffset) ? Math.max(-10, Math.min(10, savedOffset)) : 0;
   $('lyricsOffsetValue').textContent = `${Number($('lyricsOffset').value).toFixed(1)} s`;
-  $('markLyricsToggle').hidden = parsed.synced || !parsed.lines.length;
+  $('markLyricsToggle').hidden = !parsed.lines.length;
+  $('markLyricsToggle').textContent = parsed.synced ? 'Refazer sincronização manual' : 'Marcar linhas durante a reprodução';
   setLyricsStatus(parsed.lines.length ? `${source} · ${parsed.synced ? 'sincronizada' : 'sem tempos'}` : 'Nenhuma letra encontrada.');
   renderLyricsLines();
   updateAutomaticLyricsControls();
@@ -750,19 +754,24 @@ function persistLyricsState() {
   return window.isotopus.saveLyricsState(lyricsTrackId, state).catch(() => {});
 }
 function updateManualSyncProgress() {
-  const marked = currentLyrics.lines.filter(line => line.time != null).length;
+  const marked = manualRedoPending ? 0 : currentLyrics.lines.filter(line => line.time != null).length;
   $('manualSyncProgress').textContent = `${marked} de ${currentLyrics.lines.length} linhas marcadas`;
-  $('manualSyncNext').disabled = !currentLyrics.lines.length || marked >= currentLyrics.lines.length;
+  $('manualSyncNext').disabled = !currentLyrics.lines.length || (!manualRedoPending && marked >= currentLyrics.lines.length);
 }
 async function markLyricsLine(index) {
   const line = currentLyrics.lines[index]; if (!line) return;
+  if (manualRedoPending) {
+    currentLyrics.lines.forEach(item => { item.time = null; });
+    currentLyrics.synced = false; manualRedoPending = false;
+    $('lyricsOffset').value = '0'; $('lyricsOffset').dispatchEvent(new Event('input'));
+  }
   line.time = Math.max(0, audio.currentTime || 0);
   const marked = currentLyrics.lines.filter(item => item.time != null).length;
   if (marked === currentLyrics.lines.length) {
     currentLyrics.synced = true; currentLyrics.raw = window.IsotopusLyrics.formatLyrics(currentLyrics.lines);
-    manualLyricsMode = false; $('markLyricsToggle').hidden = true;
+    manualLyricsMode = false; $('markLyricsToggle').hidden = false;
+    $('markLyricsToggle').textContent = 'Refazer sincronização manual';
     updateAutomaticLyricsControls();
-    $('markLyricsToggle').textContent = 'Marcar linhas durante a reprodução';
     setLyricsStatus('Sincronização concluída. Letra salva automaticamente neste computador.');
   } else setLyricsStatus(`Marcada a linha ${marked} de ${currentLyrics.lines.length}. Continue no próximo verso.`);
   await persistLyricsState(); renderLyricsLines(); updateManualSyncProgress();
@@ -774,20 +783,36 @@ function markNextLyricsLine() {
     manualLyricsMode = true;
     $('markLyricsToggle').textContent = 'Concluir marcação manual';
   }
-  const index = currentLyrics.lines.findIndex(line => line.time == null);
+  const index = manualRedoPending ? 0 : currentLyrics.lines.findIndex(line => line.time == null);
   if (index >= 0) markLyricsLine(index);
+}
+function seekToLyricLine(index) {
+  const line = currentLyrics.lines[index];
+  if (!line || line.time == null || !Number.isFinite(Number(line.time))) return;
+  const offset = Number($('lyricsOffset').value) || 0;
+  const target = Math.max(0, Number(line.time) + offset);
+  if (Number.isFinite(audio.duration)) audio.currentTime = Math.min(target, Math.max(0, audio.duration - 0.05));
+  else audio.currentTime = target;
 }
 function renderLyricsLines() {
   const container = $('lyricsLines'); container.replaceChildren(); activeLyricIndex = -1;
   if (!currentLyrics.lines.length) { showLyricsEmpty('Abra um arquivo LRC/TXT ou busque uma letra na web.'); return; }
   currentLyrics.lines.forEach((line, index) => {
-    const row = document.createElement(manualLyricsMode ? 'button' : 'div');
+    const canSeek = line.time != null && Number.isFinite(Number(line.time));
+    const row = document.createElement(manualLyricsMode || canSeek ? 'button' : 'div');
     row.className = 'lyrics-line'; row.dataset.index = String(index);
     if (manualLyricsMode) {
       row.type = 'button'; row.title = 'Marcar esta linha no tempo atual';
       row.textContent = `${line.time == null ? '○' : fmt(line.time)}  ${line.text}`;
       row.addEventListener('click', () => markLyricsLine(index));
-    } else row.textContent = line.text;
+    } else {
+      row.textContent = line.text;
+      if (canSeek) {
+        row.type = 'button'; row.title = `Pular para ${fmt(line.time)}`;
+        row.setAttribute('aria-label', `Pular para ${fmt(line.time)}: ${line.text}`);
+        row.addEventListener('click', () => seekToLyricLine(index));
+      }
+    }
     container.append(row);
   });
   updateLyricsHighlight(true);
@@ -814,6 +839,7 @@ async function loadCurrentLyrics() {
   $('lyricsTrackTitle').textContent = currentTrack.title; $('lyricsTrackArtist').textContent = `${currentTrack.artist} · ${currentTrack.album}`;
   $('lyricsHeading').textContent = currentTrack.title; $('lyricsHeading').title = currentTrack.title; coverStyle(currentTrack, $('lyricsCover'));
   currentLyrics = { raw: '', synced: false, lines: [], source: '' }; manualLyricsMode = false;
+  manualRedoPending = false;
   updateAutomaticLyricsControls();
   $('lyricsSyncPanel').hidden = true; $('lyricsMenu').hidden = true;
   const saved = await window.isotopus.getLyricsState(currentTrack.id);
@@ -823,7 +849,8 @@ async function loadCurrentLyrics() {
     updateAutomaticLyricsControls();
     $('lyricsOffset').value = Math.max(-10, Math.min(10, Number(saved.offset) || 0));
     $('lyricsOffsetValue').textContent = `${Number($('lyricsOffset').value).toFixed(1)} s`;
-    $('markLyricsToggle').hidden = currentLyrics.synced;
+    $('markLyricsToggle').hidden = !currentLyrics.lines.length;
+    $('markLyricsToggle').textContent = currentLyrics.synced ? 'Refazer sincronização manual' : 'Marcar linhas durante a reprodução';
     setLyricsStatus(`Letra salva neste computador · ${currentLyrics.synced ? 'sincronizada' : 'sem tempos'}`);
     renderLyricsLines(); updateManualSyncProgress(); return;
   }
@@ -1149,10 +1176,16 @@ $('saveLyricsButton').addEventListener('click', saveCurrentLyrics);
 $('syncLyricsButton').addEventListener('click', () => { $('lyricsMenu').hidden = true; $('lyricsSyncPanel').hidden = !$('lyricsSyncPanel').hidden; });
 $('markLyricsToggle').addEventListener('click', event => {
   if (!currentLyrics.lines.length) { setLyricsStatus('Adicione uma letra antes de marcar os tempos.'); return; }
+  if (manualRedoPending && manualLyricsMode) manualRedoPending = false;
   manualLyricsMode = !manualLyricsMode;
-  if (manualLyricsMode) { $('lyricsOffset').value = '0'; $('lyricsOffset').dispatchEvent(new Event('input')); }
-  event.currentTarget.textContent = manualLyricsMode ? 'Concluir marcação manual' : 'Marcar linhas durante a reprodução';
-  setLyricsStatus(manualLyricsMode ? 'Clique em cada linha no instante em que ela é cantada.' : 'Marcação manual pausada.');
+  if (manualLyricsMode) {
+    if (currentLyrics.synced) manualRedoPending = true;
+    else { $('lyricsOffset').value = '0'; $('lyricsOffset').dispatchEvent(new Event('input')); }
+  }
+  event.currentTarget.textContent = manualLyricsMode ? 'Concluir marcação manual' : currentLyrics.synced ? 'Refazer sincronização manual' : 'Marcar linhas durante a reprodução';
+  setLyricsStatus(manualLyricsMode
+    ? manualRedoPending ? 'A marcação atual só será substituída quando você marcar a primeira linha.' : 'Clique em cada linha no instante em que ela é cantada.'
+    : 'Marcação manual pausada.');
   renderLyricsLines(); updateManualSyncProgress();
 });
 $('lyricsOffset').addEventListener('input', event => {

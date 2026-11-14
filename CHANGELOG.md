@@ -1,3 +1,17 @@
+# Isótopus 0.2.1
+
+## Uso de memória
+
+- Capas incorporadas nos arquivos de música são lidas do cache em disco sob demanda, em vez de manter todas as imagens carregadas na memória do processo principal.
+- Miniaturas de capas são solicitadas com carregamento preguiçoso e baixa prioridade; listas exibem 48 faixas por lote, com o botão existente para carregar mais.
+- A biblioteca, reprodução, capas e sincronização de letras mantêm o mesmo comportamento.
+- Corrigido o padding padrão do botão do miniplayer, que deixava uma faixa do fundo visível ao redor da capa; a capa do player carrega imediatamente.
+- Reordenadas as camadas da linha do player para manter o marcador vertical acima da barra.
+- Linhas com tempo em letras LRC agora permitem clicar para buscar a reprodução naquele ponto, respeitando o ajuste de sincronização atual.
+- A sincronização manual pode ser refeita depois de concluída; a marcação anterior só é substituída no primeiro clique de uma nova tentativa.
+
+---
+
 # Isótopus 0.2.0
 
 ## Letras

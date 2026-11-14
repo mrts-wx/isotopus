@@ -77,7 +77,7 @@ function createLibrary(cacheDirectory) {
         cache.set(file, record);
         trackPaths.set(record.track.id, file);
         if (record.track.coverId) {
-          try { assets.set(record.track.coverId, { buffer: await fs.readFile(path.join(cacheDirectory, `${record.track.coverId}.cover`)), contentType: record.track.coverType || 'image/jpeg' }); } catch {}
+          assets.set(record.track.coverId, { path: path.join(cacheDirectory, `${record.track.coverId}.cover`), contentType: record.track.coverType || 'image/jpeg' });
         }
       }
     } catch {}
@@ -127,8 +127,15 @@ function createLibrary(cacheDirectory) {
           assets.set(audioId, { path: playbackPath || file });
           trackPaths.set(track.id, file);
           if (track.coverBuffer) {
-            assets.set(track.coverId, { buffer: track.coverBuffer, contentType: track.coverType });
-            if (cacheDirectory) await fs.writeFile(path.join(cacheDirectory, `${track.coverId}.cover`), track.coverBuffer).catch(() => {});
+            let coverAsset = { buffer: track.coverBuffer, contentType: track.coverType };
+            if (cacheDirectory) {
+              const coverPath = path.join(cacheDirectory, `${track.coverId}.cover`);
+              try {
+                await fs.writeFile(coverPath, track.coverBuffer);
+                coverAsset = { path: coverPath, contentType: track.coverType };
+              } catch {}
+            }
+            assets.set(track.coverId, coverAsset);
             delete track.coverBuffer;
             delete track.coverType;
           }

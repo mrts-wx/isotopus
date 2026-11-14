@@ -1,4 +1,5 @@
 .recent-section{margin-top:30px}
+.track-art{padding:0;overflow:hidden}
 .recent-section .section-heading{margin-bottom:15px}
 .recent-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
 .recent-grid .result-card{padding:9px;border-radius:14px;transition:transform .22s cubic-bezier(.2,1.25,.35,1),box-shadow .2s,border-color .2s}
