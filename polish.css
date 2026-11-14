@@ -17,5 +17,8 @@ body{height:100vh;display:flex;flex-direction:column}
 .like-button{width:30px;height:30px;padding:0;border-radius:9px;transition:background-color .2s var(--smooth),color .2s var(--smooth)}
 .like-button:hover,.tool-button:hover{background:#eaddca;border-radius:9px}
 .player-tools{gap:10px}
+.load-more{display:block;margin:20px auto 4px;padding:10px 16px;border:1px solid #d9c4ac;border-radius:11px;background:#f7ecde;color:#5c5259;font-size:11px;box-shadow:0 4px 14px #5c52590b;transition:transform .3s var(--spring),background-color .2s var(--smooth),border-color .2s var(--smooth)}
+.load-more:hover{transform:translateY(-1px);background:#fff4e5;border-color:#a3c9a7}
+.hero-card[hidden]{display:none}
 @media(max-width:1150px){.sidebar{margin-left:10px}.player-bar{margin-inline:10px}}
 @media(max-width:850px){.sidebar{margin-left:8px}.player-bar{margin-inline:8px}}

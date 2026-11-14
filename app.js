@@ -17,6 +17,7 @@ let repeatMode = 0;
 let toastTimer;
 let lastPresenceSignature = '';
 let searchTimer;
+const PAGE_SIZE = 120;
 const titles = { listen: 'Ouvir agora', songs: 'Faixas', albums: 'Álbuns', artists: 'Artistas', favorites: 'Favoritas', recent: 'Tocadas recentemente', folders: 'Pastas' };
 const safeArray = key => { try { return JSON.parse(store.get(key) || '[]'); } catch { return []; } };
 
@@ -43,6 +44,7 @@ function qualityText(track) {
 }
 function setLibraryState() {
   const count = tracks.length;
+  $('heroCard').hidden = folders.length > 0;
   $('accountTitle').textContent = folders.length ? `${folders.length} pasta${folders.length > 1 ? 's' : ''} monitorada${folders.length > 1 ? 's' : ''}` : 'Escolher pasta de música';
   $('accountSubtitle').textContent = count ? `${count} faixa${count === 1 ? '' : 's'} local${count === 1 ? '' : 'is'}` : 'Sua biblioteca fica no seu PC';
   $('connectionLabel').textContent = folders.length ? `${count} faixas · monitorando` : 'Nenhuma pasta monitorada';
@@ -113,6 +115,30 @@ function groupsForArtists(items) {
   }
   return [...groups.values()].map(group => ({ ...group, artist: `${group.tracks.length} faixas` })).sort((a, b) => a.title.localeCompare(b.title));
 }
+function createTrackCard(item, items, kind) {
+  const card = document.createElement('button'); card.className = 'result-card'; card.type = 'button';
+  const art = document.createElement('span'); art.className = 'result-art'; coverStyle(item, art);
+  const copy = document.createElement('span'); copy.className = 'result-copy';
+  const title = document.createElement('b'); title.textContent = item.title;
+  const subtitle = document.createElement('small'); subtitle.textContent = item.artist || item.album || '';
+  copy.append(title, subtitle);
+  if (kind === 'track') {
+    const meta = document.createElement('span'); meta.className = 'track-info';
+    const quality = document.createElement('span'); quality.className = `quality-badge${item.lossless ? '' : ' compressed'}`; quality.textContent = item.lossless ? 'LOSSLESS' : 'COMPRESSED';
+    const duration = document.createElement('small'); duration.textContent = fmt(item.duration);
+    meta.append(quality, duration); copy.append(meta);
+  } else {
+    const extra = document.createElement('small'); extra.textContent = item.kind === 'album' ? `${item.count} faixas` : `${item.tracks?.length || 0} faixas`; extra.className = 'folder-count'; copy.append(extra);
+  }
+  card.append(art, copy);
+  if (item.id === currentTrack?.id || item.tracks?.some(track => track.id === currentTrack?.id)) card.classList.add('playing-card');
+  card.addEventListener('click', () => {
+    if (item.kind === 'album' || item.kind === 'artist') playCollection(item.tracks);
+    else if (item.kind === 'folder') { renderFolderDialog(); $('settingsDialog').showModal(); }
+    else playTrack(item, items);
+  });
+  return card;
+}
 function renderCards(items, emptyMessage, kind = 'track') {
   let results = $('dynamicResults');
   if (!results) { results = document.createElement('section'); results.id = 'dynamicResults'; results.className = 'section-block'; $('content').append(results); }
@@ -126,31 +152,19 @@ function renderCards(items, emptyMessage, kind = 'track') {
     results.append(empty); return;
   }
   const grid = document.createElement('div'); grid.className = kind === 'queue' ? 'results-grid queue-list' : 'results-grid';
-  for (const item of items) {
-    const card = document.createElement('button'); card.className = 'result-card'; card.type = 'button';
-    const art = document.createElement('span'); art.className = 'result-art'; coverStyle(item, art);
-    const copy = document.createElement('span'); copy.className = 'result-copy';
-    const title = document.createElement('b'); title.textContent = item.title;
-    const subtitle = document.createElement('small'); subtitle.textContent = item.artist || item.album || '';
-    copy.append(title, subtitle);
-    if (kind === 'track') {
-      const meta = document.createElement('span'); meta.className = 'track-info';
-      const quality = document.createElement('span'); quality.className = `quality-badge${item.lossless ? '' : ' compressed'}`; quality.textContent = item.lossless ? 'LOSSLESS' : 'COMPRESSED';
-      const duration = document.createElement('small'); duration.textContent = fmt(item.duration);
-      meta.append(quality, duration); copy.append(meta);
-    } else {
-      const extra = document.createElement('small'); extra.textContent = item.kind === 'album' ? `${item.count} faixas` : `${item.tracks?.length || 0} faixas`; extra.className = 'folder-count'; copy.append(extra);
-    }
-    card.append(art, copy);
-    if (item.id === currentTrack?.id || item.tracks?.some(track => track.id === currentTrack?.id)) card.classList.add('playing-card');
-    card.addEventListener('click', () => {
-      if (item.kind === 'album' || item.kind === 'artist') playCollection(item.tracks);
-      else if (item.kind === 'folder') { renderFolderDialog(); $('settingsDialog').showModal(); }
-      else playTrack(item, items);
-    });
-    grid.append(card);
-  }
+  let offset = 0;
   results.append(grid);
+  const renderBatch = () => {
+    const end = Math.min(offset + PAGE_SIZE, items.length);
+    for (; offset < end; offset++) grid.append(createTrackCard(items[offset], items, kind));
+    results.querySelector('.load-more')?.remove();
+    if (offset < items.length) {
+      const more = document.createElement('button'); more.type = 'button'; more.className = 'load-more';
+      more.textContent = `Mostrar mais · ${items.length - offset} restantes`;
+      more.addEventListener('click', renderBatch, { once: true }); results.append(more);
+    }
+  };
+  renderBatch();
 }
 function removeDynamic() { $('dynamicResults')?.remove(); }
 function setPageHeading(view) {
@@ -203,7 +217,7 @@ function renderCurrentTrack() {
     $('trackTitle').textContent = 'Escolha uma faixa'; $('trackArtist').textContent = 'Sua música, no seu ritmo';
     $('trackQuality').textContent = 'ÁUDIO LOCAL'; $('trackQuality').classList.remove('compressed');
     coverStyle({}, $('trackArt')); $('likeButton').textContent = '♡';
-    $('playButton').textContent = '▶'; $('playButton').title = 'Reproduzir'; return;
+    $('playButton').textContent = '▶'; $('playButton').title = 'Reproduzir'; updateMediaSession(); return;
   }
   $('trackTitle').textContent = currentTrack.title;
   $('trackArtist').textContent = `${currentTrack.artist} · ${currentTrack.album}`;
@@ -214,6 +228,18 @@ function renderCurrentTrack() {
   $('likeButton').textContent = safeArray('favorites').includes(currentTrack.id) ? '♥' : '♡';
   $('playButton').textContent = audio.paused ? '▶' : 'Ⅱ';
   $('playButton').title = audio.paused ? 'Reproduzir' : 'Pausar';
+  updateMediaSession();
+}
+function updateMediaSession() {
+  const session = navigator.mediaSession;
+  if (!session) return;
+  try {
+    if (currentTrack && typeof MediaMetadata !== 'undefined') {
+      session.metadata = new MediaMetadata({ title: currentTrack.title, artist: currentTrack.artist, album: currentTrack.album, artwork: currentTrack.coverUrl ? [{ src: currentTrack.coverUrl, sizes: '512x512' }] : [] });
+    } else session.metadata = null;
+    session.playbackState = currentTrack ? (audio.paused ? 'paused' : 'playing') : 'none';
+    if (Number.isFinite(audio.duration) && audio.duration > 0 && typeof session.setPositionState === 'function') session.setPositionState({ duration: audio.duration, playbackRate: audio.playbackRate || 1, position: Math.min(audio.currentTime || 0, audio.duration) });
+  } catch {}
 }
 function rememberTrack(track) {
   const recent = safeArray('recentIds').filter(id => id !== track.id);
@@ -242,7 +268,7 @@ async function nextTrack() {
     queueIndex = next;
   } else if (queueIndex + 1 < queue.length) queueIndex++;
   else if (repeatMode === 1) queueIndex = 0;
-  else { currentTrack = null; audio.pause(); await syncPresence(false); return; }
+  else { currentTrack = null; audio.pause(); audio.removeAttribute('src'); audio.load(); renderCurrentTrack(); await syncPresence(false); return; }
   playTrack(queue[queueIndex], queue);
 }
 function previousTrack() {
@@ -260,28 +286,42 @@ async function loadLibrary() {
   catch (error) { toast(`Não consegui abrir sua biblioteca: ${error.message}`); }
 }
 function renderFolderDialog() { renderFolderList(); }
+function showSettings() { renderFolderDialog(); $('settingsDialog').showModal(); }
 
 document.querySelectorAll('.nav-item').forEach(button => button.addEventListener('click', () => openView(button.dataset.view)));
 document.querySelectorAll('.quick-card').forEach(button => button.addEventListener('click', () => openView(button.dataset.target)));
-$('heroConnect').addEventListener('click', chooseFolders); $('accountButton').addEventListener('click', chooseFolders); $('addFolder').addEventListener('click', chooseFolders);
-$('settingsButton').addEventListener('click', () => { renderFolderDialog(); $('settingsDialog').showModal(); });
+$('heroConnect').addEventListener('click', chooseFolders); $('addFolder').addEventListener('click', chooseFolders);
+$('accountButton').addEventListener('click', () => folders.length ? showSettings() : chooseFolders());
+$('settingsButton').addEventListener('click', showSettings);
 $('learnButton').addEventListener('click', () => $('infoDialog').showModal()); $('infoDone').addEventListener('click', () => $('infoDialog').close());
 $('viewLibrary').addEventListener('click', () => openView('songs'));
 $('rescanButton').addEventListener('click', async () => { toast('Verificando as pastas…'); applyLibrary(await window.isotopus.rescanLibrary()); });
 $('rescanLibrary').addEventListener('click', async () => { applyLibrary(await window.isotopus.rescanLibrary()); toast(`${tracks.length} faixas verificadas.`); });
 $('backButton').addEventListener('click', () => openView('listen')); $('forwardButton').addEventListener('click', () => toast('Selecione uma seção da biblioteca.'));
 $('searchInput').addEventListener('input', event => { clearTimeout(searchTimer); const value = event.currentTarget.value; searchTimer = setTimeout(() => value.trim() ? searchLibrary(value.trim()) : openView(activeView), 120); });
-document.addEventListener('keydown', event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); $('searchInput').focus(); } });
+document.addEventListener('keydown', event => {
+  const target = event.target;
+  const editing = target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); $('searchInput').focus(); return; }
+  if (editing || $('settingsDialog').open || $('infoDialog').open || event.altKey || event.metaKey || event.ctrlKey) return;
+  if (event.code === 'Space') { event.preventDefault(); $('playButton').click(); }
+  else if (event.key === 'ArrowRight' && event.shiftKey) { event.preventDefault(); nextTrack(); }
+  else if (event.key === 'ArrowLeft' && event.shiftKey) { event.preventDefault(); previousTrack(); }
+  else if (event.key === 'ArrowRight' && Number.isFinite(audio.duration)) { event.preventDefault(); audio.currentTime = Math.min(audio.duration, audio.currentTime + 5); }
+  else if (event.key === 'ArrowLeft' && Number.isFinite(audio.duration)) { event.preventDefault(); audio.currentTime = Math.max(0, audio.currentTime - 5); }
+  else if (event.key === 'ArrowUp') { event.preventDefault(); audio.volume = Math.min(1, audio.volume + 0.05); $('volume').value = Math.round(audio.volume * 100); store.set('volume', String($('volume').value)); }
+  else if (event.key === 'ArrowDown') { event.preventDefault(); audio.volume = Math.max(0, audio.volume - 0.05); $('volume').value = Math.round(audio.volume * 100); store.set('volume', String($('volume').value)); }
+});
 $('playButton').addEventListener('click', async () => {
   if (!currentTrack) { if (!folders.length) chooseFolders(); else openView('songs'); return; }
   try { if (audio.paused) await audio.play(); else audio.pause(); renderCurrentTrack(); await syncPresence(!audio.paused); }
   catch (error) { toast(`Não foi possível reproduzir: ${error.message}`); }
 });
 $('nextButton').addEventListener('click', nextTrack); $('previousButton').addEventListener('click', previousTrack);
-$('shuffleButton').addEventListener('click', event => { shuffled = !shuffled; event.currentTarget.classList.toggle('active', shuffled); toast(shuffled ? 'Aleatório ativado' : 'Aleatório desativado'); });
-$('repeatButton').addEventListener('click', event => { repeatMode = (repeatMode + 1) % 3; event.currentTarget.classList.toggle('active', repeatMode > 0); toast(['Repetição desativada', 'Repetir fila', 'Repetir faixa'][repeatMode]); });
+$('shuffleButton').addEventListener('click', event => { shuffled = !shuffled; store.set('shuffle', shuffled ? 'yes' : ''); event.currentTarget.classList.toggle('active', shuffled); toast(shuffled ? 'Aleatório ativado' : 'Aleatório desativado'); });
+$('repeatButton').addEventListener('click', event => { repeatMode = (repeatMode + 1) % 3; store.set('repeat', String(repeatMode)); event.currentTarget.classList.toggle('active', repeatMode > 0); toast(['Repetição desativada', 'Repetir fila', 'Repetir faixa'][repeatMode]); });
 $('seek').addEventListener('input', event => { if (Number.isFinite(audio.duration)) audio.currentTime = Number(event.currentTarget.value); });
-$('volume').addEventListener('input', event => { audio.volume = Number(event.currentTarget.value) / 100; });
+$('volume').addEventListener('input', event => { audio.volume = Number(event.currentTarget.value) / 100; store.set('volume', event.currentTarget.value); });
 $('likeButton').addEventListener('click', () => {
   if (!currentTrack) return toast('Selecione uma faixa primeiro.');
   const favorites = new Set(safeArray('favorites'));
@@ -314,7 +354,19 @@ audio.addEventListener('loadedmetadata', updateTimeline); audio.addEventListener
 audio.addEventListener('play', () => { renderCurrentTrack(); syncPresence(true); });
 audio.addEventListener('pause', () => { renderCurrentTrack(); syncPresence(false); });
 audio.addEventListener('ended', nextTrack);
+audio.addEventListener('timeupdate', updateMediaSession);
 audio.addEventListener('error', () => { if (currentTrack) toast(`Este arquivo não pôde ser decodificado (${currentTrack.codec}).`); });
+if (navigator.mediaSession) {
+  for (const [action, handler] of Object.entries({ play: () => audio.play(), pause: () => audio.pause(), previoustrack: previousTrack, nexttrack: nextTrack, seekbackward: details => { audio.currentTime = Math.max(0, audio.currentTime - (details.seekOffset || 10)); }, seekforward: details => { audio.currentTime = Math.min(audio.duration || Infinity, audio.currentTime + (details.seekOffset || 10)); }, seekto: details => { if (Number.isFinite(audio.duration)) audio.currentTime = Math.max(0, Math.min(audio.duration, details.seekTime)); } })) {
+    try { navigator.mediaSession.setActionHandler(action, handler); } catch {}
+  }
+}
 window.isotopus.onLibraryUpdated(applyLibrary);
-$('discordId').value = store.get('discordId'); $('discordToggle').checked = store.get('discordEnabled') === 'yes'; audio.volume = Number($('volume').value) / 100;
+$('discordId').value = store.get('discordId'); $('discordToggle').checked = store.get('discordEnabled') === 'yes';
+const savedVolume = Number(store.get('volume'));
+audio.volume = Number.isFinite(savedVolume) && store.get('volume') !== '' ? Math.min(1, Math.max(0, savedVolume / 100)) : Number($('volume').value) / 100;
+$('volume').value = Math.round(audio.volume * 100);
+shuffled = store.get('shuffle') === 'yes'; $('shuffleButton').classList.toggle('active', shuffled);
+repeatMode = Number(store.get('repeat') || 0); if (![0, 1, 2].includes(repeatMode)) repeatMode = 0;
+$('repeatButton').classList.toggle('active', repeatMode > 0);
 loadLibrary();

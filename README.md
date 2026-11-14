@@ -16,6 +16,7 @@ npm start
 ```
 
 Na primeira execução, escolha uma pasta com seus arquivos. O app acompanha mudanças e atualiza a biblioteca. Use **Biblioteca e ajustes → Adicionar pasta** para incluir mais pastas.
+Depois que uma pasta for selecionada, o painel de boas-vindas some; o cartão da biblioteca e **Biblioteca e ajustes** abrem o gerenciamento de pastas.
 
 Para criar o instalador Ubuntu `.deb`:
 
@@ -26,6 +27,10 @@ npm run build:ubuntu
 ## Rich Presence
 
 Opcionalmente, informe o Application ID de uma aplicação Discord nas configurações. O cliente Discord desktop precisa estar aberto.
+
+## Controles
+
+O Isótopus salva volume, aleatório e repetição. Os controles de mídia do desktop são integrados quando disponíveis. Atalhos: `Espaço` reproduz/pausa, `←/→` busca 5 segundos, `Shift + ←/→` troca de faixa, `↑/↓` ajusta o volume e `Ctrl + K` foca a busca. Coleções grandes carregam em blocos para manter a interface leve.
 
 ## Verificação
 
