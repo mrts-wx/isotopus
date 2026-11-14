@@ -5,6 +5,7 @@ const { createStaticServer } = require('./services/server');
 const { createLibraryController } = require('./controllers/library-controller');
 const { registerPlaylistController } = require('./controllers/playlist-controller');
 const { registerLyricsController } = require('./controllers/lyrics-controller');
+const { registerDownloadController } = require('./controllers/download-controller');
 
 const singleInstanceLock = app.requestSingleInstanceLock();
 let pendingSecondInstanceFocus = false;
@@ -19,6 +20,7 @@ let settingsSaveQueue = Promise.resolve();
 let settingsSaveTimer;
 let settingsDirty = false;
 let libraryController;
+let downloadController;
 
 function settingsPath() { return path.join(app.getPath('userData'), 'settings.json'); }
 async function loadSettings() {
@@ -104,6 +106,9 @@ ipcMain.handle('window:setZoomFactor', (event, factor) => {
   win.webContents.setZoomFactor(zoom);
   return true;
 });
+ipcMain.handle('shell:openExternal', async (_event, rawUrl) => {
+  try { const url = new URL(String(rawUrl)); if (url.protocol !== 'https:') return false; await shell.openExternal(url.href); return true; } catch { return false; }
+});
 ipcMain.on('store:get', event => { event.returnValue = settings.store; });
 ipcMain.on('store:set', (event, { key, value }) => {
   if (typeof key !== 'string' || !/^[\w:.-]{1,120}$/.test(key) || typeof value !== 'string' || value.length > 1024 * 1024) return;
@@ -123,6 +128,7 @@ if (singleInstanceLock) {
     libraryController = createLibraryController({ app, ipcMain, dialog, settings, saveSettings, getWindow: () => win, getServerOrigin: () => `http://127.0.0.1:${serverPort}` });
     registerPlaylistController({ ipcMain, dialog, getWindow: () => win, resolveTrackPath: id => libraryController.resolveTrackPath(id) });
     registerLyricsController({ app, ipcMain, shell, dialog, utilityProcess, getWindow: () => win, resolveTrackPath: id => libraryController.resolveTrackPath(id) });
+    downloadController = registerDownloadController({ app, ipcMain, getWindow: () => win, getSettings: () => settings, saveSettings });
     createWindow(port);
     if (pendingSecondInstanceFocus) showWindow();
     libraryController.watchFolders();
@@ -130,6 +136,7 @@ if (singleInstanceLock) {
   });
   app.on('window-all-closed', async () => {
     libraryController?.dispose();
+    downloadController?.dispose();
     if (server) server.close();
     if (process.platform !== 'darwin') app.quit();
   });

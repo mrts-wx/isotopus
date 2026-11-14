@@ -1,3 +1,20 @@
+# Isótopus 0.2.2
+
+## Atualização e nova interface
+
+- Primeira grande renovação visual: hierarquia tipográfica, superfícies, navegação e espaçamento redesenhados, mantendo os cantos arredondados e a identidade do Isótopus.
+- O app consulta as Releases oficiais e avisa quando existe uma versão mais nova, mostrando o instalador de Ubuntu/Debian, Arch ou Windows detectado no sistema. A instalação continua sob controle da pessoa usuária.
+
+## Downloads opcionais
+
+- Nova aba **Baixar música**, com consentimento antes de instalar ou executar o yt-dlp oficial. O executável fica no perfil local do usuário e o processo roda em segundo plano, sem abrir terminal ou sobrepor a janela.
+- Baixe o melhor áudio disponível convertido para MP3, incorporando a miniatura como capa e metadados de título/artista no arquivo. A barra acompanha o percentual real de transferência em tempo real e só conclui após conversão e gravação de capa/metadados; o arquivo vai direto para a pasta monitorada selecionada e entra na biblioteca após a varredura.
+- YouTube, SoundCloud e outros sites podem funcionar se o extrator do yt-dlp os suportar naquele momento. A lista muda com frequência; Spotify não disponibiliza o áudio neste fluxo.
+- Conversão para MP3 requer FFmpeg instalado no sistema. A tela informa quando ele não está disponível.
+- A ferramenta aceita links HTTP/HTTPS públicos e não baixa playlists em lote. Use apenas conteúdo que você tem direito de salvar.
+
+---
+
 # Isótopus 0.2.1
 
 ## Estrutura interna

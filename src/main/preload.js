@@ -7,6 +7,18 @@ contextBridge.exposeInMainWorld('isotopus', {
   rescanLibrary: () => ipcRenderer.invoke('library:rescan'),
   mediaUrl: id => ipcRenderer.invoke('library:mediaUrl', id),
   exportPlaylist: tracks => ipcRenderer.invoke('playlist:export', tracks),
+  getDownloadConsent: () => ipcRenderer.invoke('downloads:consent:get'),
+  setDownloadConsent: accepted => ipcRenderer.invoke('downloads:consent:set', accepted),
+  checkFfmpeg: () => ipcRenderer.invoke('downloads:check-ffmpeg'),
+  downloadAudio: options => ipcRenderer.invoke('downloads:start', options),
+  cancelDownload: () => ipcRenderer.invoke('downloads:cancel'),
+  checkForUpdates: () => ipcRenderer.invoke('updates:check'),
+  openExternal: url => ipcRenderer.invoke('shell:openExternal', url),
+  onDownloadProgress: callback => {
+    const listener = (_event, data) => callback(data);
+    ipcRenderer.on('download:progress', listener);
+    return () => ipcRenderer.removeListener('download:progress', listener);
+  },
   getLocalLyrics: id => ipcRenderer.invoke('lyrics:local', id),
   openLyricsFile: () => ipcRenderer.invoke('lyrics:openFile'),
   saveLyrics: (id, content) => ipcRenderer.invoke('lyrics:save', { id, content }),

@@ -38,7 +38,7 @@ let repeatMode = 0;
 let toastTimer;
 let searchTimer;
 const PAGE_SIZE = 48;
-const titles = { listen: 'Ouvir agora', songs: 'Faixas', artists: 'Artistas', favorites: 'Favoritas', playlists: 'Playlists' };
+const titles = { listen: 'Ouvir agora', songs: 'Faixas', artists: 'Artistas', favorites: 'Favoritas', playlists: 'Playlists', downloads: 'Baixar música' };
 const safeArray = key => { try { return JSON.parse(store.get(key) || '[]'); } catch { return []; } };
 const normalizeSearch = value => String(value || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('pt-BR').trim();
 
@@ -89,6 +89,81 @@ function applyTheme(theme = store.get('theme') || 'system') {
 function toast(message) {
   const el = $('toast'); el.textContent = message; el.classList.add('show');
   clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+let ytDlpConsentKnown = false;
+let updateRelease = null;
+const downloadJobs = [];
+let currentDownloadJob = null;
+function updateDownloadFolderOptions() {
+  const select = $('downloadFolder'), previous = select.value;
+  select.replaceChildren();
+  folders.forEach(folder => { const option = document.createElement('option'); option.value = folder; option.textContent = folder; select.append(option); });
+  if (folders.includes(previous)) select.value = previous;
+  select.disabled = folders.length === 0;
+  $('downloadStartButton').disabled = folders.length === 0;
+  $('downloadAddFolder').hidden = folders.length > 0;
+  if (!folders.length) setDownloadStatus('Adicione primeiro uma pasta de músicas nas configurações; os downloads serão salvos nela.');
+}
+function setDownloadStatus(message, error = false) {
+  const status = $('downloadStatus'); status.textContent = message; status.classList.toggle('error', error);
+}
+function renderDownloadJobs() {
+  const list = $('downloadList'); list.replaceChildren();
+  for (const job of downloadJobs.slice(-5).reverse()) {
+    const row = document.createElement('article'); row.className = `download-job ${job.status}`;
+    const head = document.createElement('div'); head.className = 'download-job-head';
+    const title = document.createElement('b'); title.textContent = job.title;
+    const percent = document.createElement('span'); percent.textContent = job.percent == null ? (job.status === 'done' ? 'Concluído' : job.status === 'error' ? 'Falhou' : 'Em andamento') : `${Math.round(job.percent)}%`;
+    const track = document.createElement('div'); track.className = 'download-progress-track';
+    const fill = document.createElement('span'); fill.style.width = `${job.percent ?? (job.status === 'done' ? 100 : 4)}%`; track.append(fill);
+    const detail = document.createElement('small'); detail.textContent = job.message;
+    head.append(title, percent); row.append(head, track, detail); list.append(row);
+  }
+}
+async function ensureYtDlpConsent() {
+  const existing = await window.isotopus.getDownloadConsent();
+  if (existing === true) return true;
+  if (ytDlpConsentKnown && existing === false) return false;
+  const dialog = $('ytDlpConsentDialog');
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = async accepted => { if (settled) return; settled = true; ytDlpConsentKnown = true; await window.isotopus.setDownloadConsent(accepted); if (dialog.open) dialog.close(); resolve(accepted); };
+    const onClose = () => { cleanup(); if (!settled) { settled = true; ytDlpConsentKnown = true; window.isotopus.setDownloadConsent(false); resolve(false); } };
+    const cleanup = () => { dialog.removeEventListener('close', onClose); $('acceptYtDlp').removeEventListener('click', accept); $('declineYtDlp').removeEventListener('click', decline); };
+    const accept = () => { cleanup(); finish(true); }, decline = () => { cleanup(); finish(false); };
+    dialog.addEventListener('close', onClose, { once: true }); $('acceptYtDlp').addEventListener('click', accept, { once: true }); $('declineYtDlp').addEventListener('click', decline, { once: true }); dialog.showModal();
+  });
+}
+async function enterDownloadsView() {
+  const consent = await window.isotopus.getDownloadConsent();
+  if (consent === null) { const accepted = await ensureYtDlpConsent(); if (!accepted) setDownloadStatus('Uso do yt-dlp não autorizado. Você pode autorizar ao tentar baixar.'); }
+  if (consent === false && !ytDlpConsentKnown) await ensureYtDlpConsent();
+  const ffmpeg = await window.isotopus.checkFfmpeg();
+  $('ffmpegHint').textContent = ffmpeg.available ? 'FFmpeg encontrado · necessário para gerar MP3' : 'FFmpeg ausente · instale para converter em MP3';
+  if (!folders.length) updateDownloadFolderOptions();
+}
+async function startAudioDownload() {
+  if (await window.isotopus.getDownloadConsent() === false) ytDlpConsentKnown = false;
+  if (!await ensureYtDlpConsent()) { setDownloadStatus('Sem autorização o Isótopus não instala nem executa o yt-dlp.'); return; }
+  const url = $('downloadUrl').value.trim(); if (!url) { setDownloadStatus('Cole um link antes de iniciar.', true); $('downloadUrl').focus(); return; }
+  if (!folders.length) { setDownloadStatus('Adicione primeiro uma pasta monitorada nas configurações.', true); return; }
+  let parsed; try { parsed = new URL(url); } catch { setDownloadStatus('Cole um link HTTP ou HTTPS válido.', true); return; }
+  const job = { title: `${parsed.hostname}${parsed.pathname}`.slice(0, 140), message: 'Iniciando o processo oculto…', status: 'running', percent: 0 }; currentDownloadJob = job; downloadJobs.push(job); renderDownloadJobs();
+  $('downloadStartButton').disabled = true; setDownloadStatus('O yt-dlp está executando em segundo plano. Esta janela permanece disponível.');
+  const result = await window.isotopus.downloadAudio({ url, folder: $('downloadFolder').value });
+  $('downloadStartButton').disabled = folders.length === 0;
+  if (result?.ok) { job.status = 'done'; job.percent = 100; job.message = `Salvo em ${$('downloadFolder').value}`; setDownloadStatus('Download concluído. A pasta monitorada atualizará sua biblioteca automaticamente.'); $('downloadUrl').value = ''; }
+  else if (result?.cancelled) { job.status = 'error'; job.message = 'Download cancelado.'; setDownloadStatus('Download cancelado.'); }
+  else { job.status = 'error'; job.message = result?.error || 'O download falhou.'; setDownloadStatus(job.message, true); }
+  currentDownloadJob = null; renderDownloadJobs();
+}
+async function checkForAppUpdate() {
+  const result = await window.isotopus.checkForUpdates();
+  if (!result?.ok || !result.newer || store.get('dismissUpdate') === result.latest) return;
+  updateRelease = result;
+  $('updateBannerTitle').textContent = `Isótopus ${result.latest} disponível`;
+  $('updateBannerHelp').textContent = result.installer ? `Para ${result.osFamily === 'arch' ? 'Arch Linux' : result.osFamily === 'debian' ? 'Ubuntu/Debian' : 'Windows'} · ${result.installer}` : 'Consulte as opções de instalação desta versão.';
+  $('updateBanner').hidden = false;
 }
 function fmt(seconds) {
   const n = Math.max(0, Math.floor(Number(seconds) || 0));
@@ -399,6 +474,7 @@ function renderPlaylistPlaybackControls(items) {
 }
 function removeDynamic() { $('dynamicResults')?.remove(); }
 function setPageHeading(view) {
+  if (view === 'downloads') { $('pageTitle').textContent = 'Baixar música.'; $('pageSubtitle').textContent = 'Encontre novos sons para sua coleção local.'; return; }
   const playlist = view.startsWith('playlist:') ? playlists.find(item => item.id === view.slice('playlist:'.length)) : null;
   const title = playlist?.name || titles[view] || 'Sua biblioteca';
   $('pageTitle').textContent = `${title}.`;
@@ -410,8 +486,13 @@ function openView(view, setSelected = true) {
   if (setSelected) document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('selected', el.dataset.view === navView));
   syncTransportStates();
   setPageHeading(view);
+  $('downloadsView').hidden = view !== 'downloads';
+  $('heroCard').hidden = view !== 'listen' || folders.length > 0;
+  $('homeListening').hidden = view !== 'listen' || tracks.length === 0;
   $('quickSection').hidden = view !== 'listen'; $('catalogSection').hidden = view !== 'listen'; $('recentSection').hidden = view !== 'listen';
+  $('favoritesHomeSection').hidden = view !== 'listen';
   removeDynamic();
+  if (view === 'downloads') { updateDownloadFolderOptions(); enterDownloadsView(); return; }
   if (view === 'listen') { renderHome(); return; }
   if (view === 'folders') {
     const items = folders.map(folder => ({ title: folder.split('/').filter(Boolean).at(-1) || folder, artist: folder, kind: 'folder', tracks: tracks.filter(track => track.pathLabel) }));
@@ -439,6 +520,7 @@ function openView(view, setSelected = true) {
   renderCards(tracks, folders.length ? 'Adicione músicas às pastas monitoradas.' : 'Escolha uma pasta com arquivos de áudio.');
 }
 function searchLibrary(query) {
+  if (activeView === 'downloads') return;
   if (!query) { openView(activeView); return; }
   $('quickSection').hidden = true; $('catalogSection').hidden = true; $('recentSection').hidden = true;
   $('pageTitle').innerHTML = 'Resultados<span class="gold-dot">.</span>';
@@ -976,6 +1058,28 @@ function showSettings() {
 
 document.querySelectorAll('.nav-item').forEach(button => button.addEventListener('click', () => openView(button.dataset.view)));
 document.querySelectorAll('.quick-card').forEach(button => button.addEventListener('click', () => openView(button.dataset.target)));
+$('downloadStartButton').addEventListener('click', startAudioDownload);
+$('downloadAddFolder').addEventListener('click', chooseFolders);
+$('downloadUrl').addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); startAudioDownload(); } });
+window.isotopus.onDownloadProgress(data => {
+  if (!currentDownloadJob) return;
+  currentDownloadJob.message = data.message || currentDownloadJob.message;
+  if (Number.isFinite(data.percent)) currentDownloadJob.percent = data.percent;
+  if (data.status === 'done') { currentDownloadJob.percent = 100; currentDownloadJob.status = 'done'; }
+  if (data.status === 'error') currentDownloadJob.status = 'error';
+  renderDownloadJobs();
+});
+$('dismissUpdate').addEventListener('click', () => { $('updateBanner').hidden = true; if (updateRelease) store.set('dismissUpdate', updateRelease.latest); });
+$('updateInstallButton').addEventListener('click', async () => {
+  if (!updateRelease) return;
+  if (updateRelease.installCommand) {
+    const filename = updateRelease.installer;
+    const command = updateRelease.osFamily === 'arch' ? `sudo pacman -U ~/Downloads/${filename}` : `sudo apt install ~/Downloads/${filename}`;
+    toast(`Depois de baixar, rode: ${command}`);
+  }
+  else if (updateRelease.platform === 'win32') toast('Baixe e execute o instalador Windows; feche o app durante a atualização.');
+  await window.isotopus.openExternal(updateRelease.downloadUrl);
+});
 $('heroConnect').addEventListener('click', chooseFolders); $('addFolder').addEventListener('click', chooseFolders);
 $('playLibraryButton').addEventListener('click', () => playCollection(tracks.slice(), { shuffle: false }));
 $('shuffleLibraryButton').addEventListener('click', () => playCollection(tracks.slice(), { shuffle: true }));
@@ -1174,7 +1278,7 @@ if (navigator.mediaSession) {
     try { navigator.mediaSession.setActionHandler(action, handler); } catch {}
   }
 }
-window.isotopus.onLibraryUpdated(applyLibrary);
+window.isotopus.onLibraryUpdated(data => { applyLibrary(data); if (activeView === 'downloads') updateDownloadFolderOptions(); });
 playlists = safeArray('playlists').filter(item => item && typeof item.id === 'string' && typeof item.name === 'string' && Array.isArray(item.trackIds));
 applyTheme();
 const savedVolume = Number(store.get('volume'));
@@ -1187,3 +1291,4 @@ repeatMode = Number(store.get('repeat') || 0); if (![0, 1, 2].includes(repeatMod
 syncTransportStates();
 renderQueuePopover();
 loadLibrary();
+checkForAppUpdate().catch(() => {});

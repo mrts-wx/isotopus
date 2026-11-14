@@ -345,7 +345,7 @@ test('desktop identity, app clarity, and launcher icon are configured', () => {
   const pkg = JSON.parse(read('package.json'));
   const app = read('app.js');
   assert.equal(pkg.name, 'isotopus');
-  assert.equal(pkg.version, '0.2.1');
+  assert.equal(pkg.version, '0.2.2');
   assert.equal(pkg.dependencies['@huggingface/transformers'], '^3.8.1');
   assert.equal(pkg.scripts['build:debian'], 'electron-builder --linux deb');
   assert.equal(pkg.scripts['build:arch'], 'electron-builder --linux pacman');

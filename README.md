@@ -1,6 +1,6 @@
 ![Banner do Isótopus](assets/branding/isotopus-banner.png)
 
-Player de música local para Linux e Windows, feito para organizar e ouvir uma coleção pessoal. A biblioteca fica no computador; o app oferece playlists, busca, favoritos, letras sincronizadas, equalizador e controles de mídia do sistema.
+Player de música local para Linux e Windows, feito para organizar e ouvir uma coleção pessoal. A partir da versão 0.2.2, inclui uma ferramenta opcional para baixar áudio compatível para pastas locais monitoradas. A biblioteca fica no computador; o app oferece playlists, busca, favoritos, letras sincronizadas, equalizador e controles de mídia do sistema.
 
 ## Recursos
 
@@ -10,6 +10,8 @@ Player de música local para Linux e Windows, feito para organizar e ouvir uma c
 - Busca automática de letras no LRCLIB e sincronização estimada de letras sem tempos com o áudio local.
 - Temas claro, escuro e automático, escala de interface ajustável entre 100% e 175%, além de equalizador com perfis.
 - Marcador do player animado durante a reprodução, com suporte à preferência por movimento reduzido.
+- Downloads opcionais via yt-dlp oficial, com consentimento explícito, processo oculto e arquivos salvos em uma pasta monitorada. A conversão para MP3 requer FFmpeg. Spotify não fornece áudio para este fluxo.
+- Aviso de novas versões com link para o instalador apropriado de Ubuntu/Debian, Arch ou Windows.
 - Pacotes de distribuição para Debian/Ubuntu, Arch e Windows.
 
 O app identifica o codec armazenado, mas não consegue verificar se um arquivo lossless veio de uma fonte sem perdas. A saída de áudio também pode ser mixada ou reamostrada pelo sistema operacional.
@@ -44,7 +46,7 @@ Os arquivos gerados ficam em `dist/`. O código do app fica em `src/`, organizad
 
 ## Builds publicadas
 
-Os instaladores históricos e atuais estão organizados em `release-assets/`, por versão (`v0.1.0` a `v0.2.1`). Eles são mantidos fora dos commits e enviados como anexos de Releases do GitHub, inclusive porque alguns arquivos ultrapassam o limite de tamanho de arquivos comuns do Git.
+Os instaladores históricos e atuais estão organizados em `release-assets/`, por versão (`v0.1.0` a `v0.2.2`). Eles são mantidos fora dos commits e enviados como anexos de Releases do GitHub, inclusive porque alguns arquivos ultrapassam o limite de tamanho de arquivos comuns do Git.
 
 
 ## Instalar uma build
@@ -55,7 +57,7 @@ Baixe o instalador da versão desejada na página **Releases** do repositório e
 - **Debian ou Ubuntu:** baixe `Isotopus-<versão>-amd64.deb`, abra um terminal na pasta do download e rode `sudo apt install ./Isotopus-<versão>-amd64.deb`. O `apt` instala o pacote e tenta resolver as dependências.
 - **Arch Linux:** baixe `Isotopus-<versão>-x64.pacman` e rode `sudo pacman -U ./Isotopus-<versão>-x64.pacman` no terminal, dentro da pasta do download.
 
-Substitua `<versão>` pelo número publicado, como `0.2.0`. Nem toda versão tem instalador para todos os sistemas; use um arquivo que esteja anexado à Release daquela versão. O [CHANGELOG](CHANGELOG.md) resume as mudanças da versão mais recente; cada Release também apresenta as notas daquela versão.
+Substitua `<versão>` pelo número publicado, como `0.2.2`. Nem toda versão tem instalador para todos os sistemas; use um arquivo que esteja anexado à Release daquela versão. O [CHANGELOG](CHANGELOG.md) resume as mudanças da versão mais recente; cada Release também apresenta as notas daquela versão.
 
 ### Sobre avisos de segurança
 
