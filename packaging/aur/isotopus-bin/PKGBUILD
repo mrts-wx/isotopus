@@ -1,0 +1,30 @@
+# Maintainer: omartinss
+pkgname=isotopus-bin
+pkgver=0.2.8
+pkgrel=1
+pkgdesc='Local music player with playlists and synchronized lyrics'
+arch=('x86_64')
+url='https://github.com/mrts-wx/isotopus'
+license=('MIT')
+depends=('c-ares' 'ffmpeg' 'gtk3' 'http-parser' 'libevent' 'libvpx' 'libxslt' 'libxss' 'minizip' 'nss' 're2' 'snappy' 'libnotify' 'libappindicator-gtk3')
+provides=("isotopus=${pkgver}")
+conflicts=('isotopus')
+install='isotopus-bin.install'
+source=(
+  "https://github.com/mrts-wx/isotopus/releases/download/v${pkgver}/Isotopus-${pkgver}-x64.pacman"
+  "LICENSE::https://raw.githubusercontent.com/mrts-wx/isotopus/v${pkgver}/LICENSE"
+)
+sha256sums=(
+  'e53fd375c0103b65099d1a83a161719ac9142e88ad61028c1a32af2749e0a67c'
+  'dc3b91ade5c09f0f299efb6434c29483d9aaf1a0e42625409335a6bb35fa7912'
+)
+
+package() {
+  bsdtar -xf "${srcdir}/Isotopus-${pkgver}-x64.pacman" \
+    -C "${pkgdir}" --no-same-owner --no-same-permissions \
+    --exclude='.PKGINFO' --exclude='.MTREE' --exclude='.INSTALL'
+
+  install -Dm644 "${srcdir}/LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+  install -d "${pkgdir}/usr/bin"
+  ln -s '/opt/Isótopus/isotopus' "${pkgdir}/usr/bin/isotopus"
+}

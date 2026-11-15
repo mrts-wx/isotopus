@@ -1,0 +1,30 @@
+pkgbase = isotopus-bin
+	pkgver = 0.2.8
+	pkgrel = 1
+	pkgdesc = Local music player with playlists and synchronized lyrics
+	url = https://github.com/mrts-wx/isotopus
+	install = isotopus-bin.install
+	arch = x86_64
+	license = MIT
+	depends = c-ares
+	depends = ffmpeg
+	depends = gtk3
+	depends = http-parser
+	depends = libevent
+	depends = libvpx
+	depends = libxslt
+	depends = libxss
+	depends = minizip
+	depends = nss
+	depends = re2
+	depends = snappy
+	depends = libnotify
+	depends = libappindicator-gtk3
+	provides = isotopus=0.2.8
+	conflicts = isotopus
+	source = https://github.com/mrts-wx/isotopus/releases/download/v0.2.8/Isotopus-0.2.8-x64.pacman
+	source = LICENSE::https://raw.githubusercontent.com/mrts-wx/isotopus/v0.2.8/LICENSE
+	sha256sums = e53fd375c0103b65099d1a83a161719ac9142e88ad61028c1a32af2749e0a67c
+	sha256sums = dc3b91ade5c09f0f299efb6434c29483d9aaf1a0e42625409335a6bb35fa7912
+
+pkgname = isotopus-bin
