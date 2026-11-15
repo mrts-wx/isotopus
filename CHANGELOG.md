@@ -1,3 +1,21 @@
+# Isótopus 0.2.3 — Downloads em lote e mais controle da coleção
+
+## Baixar música
+
+- O mesmo campo e botão aceitam link de faixa ou playlist compatível com yt-dlp.
+- Playlists mostram uma barra individual por faixa, com título, posição e progresso real; se uma faixa falhar, as demais continuam quando possível.
+- Para evitar filas excessivas, playlists processam no máximo os primeiros 100 itens. Faixas já existentes não são sobrescritas.
+- O downloader aceita apenas links HTTP/HTTPS, rejeita endereços locais e valida se a pasta monitorada ainda está disponível. yt-dlp continua sendo iniciado sem shell e sem janela de terminal.
+
+## Playlists e acabamento visual
+
+- Playlists podem ser renomeadas e excluídas com confirmação; excluir uma playlist não apaga os arquivos de música.
+- Faixas podem ser adicionadas, removidas e reordenadas dentro de uma playlist.
+- No tema claro, o miniplayer ganhou fundo acrílico translúcido com desfoque suave.
+- A linha ativa da letra ganha um brilho coral pulsante, legível no tema claro e compatível com a preferência por movimento reduzido.
+
+---
+
 # Isótopus 0.2.2
 
 ## Atualização e nova interface

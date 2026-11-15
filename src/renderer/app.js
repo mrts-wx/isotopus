@@ -28,6 +28,8 @@ let currentTrack = null;
 let playlists = [];
 let playlistDraftIds = [];
 let playlistPendingTrackId = '';
+let playlistEditingId = '';
+let playlistDeletePendingId = '';
 let currentLyrics = { raw: '', synced: false, lines: [], source: '' };
 let lyricsTrackId = '';
 let manualLyricsMode = false;
@@ -110,14 +112,27 @@ function setDownloadStatus(message, error = false) {
 function renderDownloadJobs() {
   const list = $('downloadList'); list.replaceChildren();
   for (const job of downloadJobs.slice(-5).reverse()) {
-    const row = document.createElement('article'); row.className = `download-job ${job.status}`;
-    const head = document.createElement('div'); head.className = 'download-job-head';
-    const title = document.createElement('b'); title.textContent = job.title;
-    const percent = document.createElement('span'); percent.textContent = job.percent == null ? (job.status === 'done' ? 'Concluído' : job.status === 'error' ? 'Falhou' : 'Em andamento') : `${Math.round(job.percent)}%`;
-    const track = document.createElement('div'); track.className = 'download-progress-track';
-    const fill = document.createElement('span'); fill.style.width = `${job.percent ?? (job.status === 'done' ? 100 : 4)}%`; track.append(fill);
+    const batch = document.createElement('section'); batch.className = `download-batch ${job.status}`;
+    const batchHead = document.createElement('div'); batchHead.className = 'download-batch-head';
+    const batchTitle = document.createElement('b'); batchTitle.textContent = job.title;
+    const completed = job.tracks.filter(track => track.status === 'done').length;
+    const failed = job.tracks.filter(track => track.status === 'error').length;
+    const total = job.tracks.find(track => track.itemCount)?.itemCount;
+    const expected = total ? Math.min(total, 100) : job.tracks.length || '…';
+    const summary = document.createElement('span'); summary.textContent = job.status === 'running' ? `${completed}/${expected} concluídas` : failed ? `${completed} concluídas · ${failed} falharam` : `${completed} concluídas`;
     const detail = document.createElement('small'); detail.textContent = job.message;
-    head.append(title, percent); row.append(head, track, detail); list.append(row);
+    batchHead.append(batchTitle, summary); batch.append(batchHead, detail);
+    for (const trackJob of job.tracks) {
+      const row = document.createElement('article'); row.className = `download-job ${trackJob.status}`;
+      const head = document.createElement('div'); head.className = 'download-job-head';
+      const title = document.createElement('b'); title.textContent = trackJob.title;
+      const percent = document.createElement('span'); percent.textContent = trackJob.status === 'done' ? 'Concluída' : trackJob.status === 'error' ? 'Falhou' : `${trackJob.position ? `${trackJob.position} · ` : ''}${Math.round(trackJob.percent || 0)}%`;
+      const progress = document.createElement('div'); progress.className = 'download-progress-track';
+      const fill = document.createElement('span'); fill.style.width = `${trackJob.percent ?? (trackJob.status === 'done' ? 100 : 0)}%`; progress.append(fill);
+      const message = document.createElement('small'); message.textContent = trackJob.message || 'Na fila';
+      head.append(title, percent); row.append(head, progress, message); batch.append(row);
+    }
+    list.append(batch);
   }
 }
 async function ensureYtDlpConsent() {
@@ -148,13 +163,15 @@ async function startAudioDownload() {
   const url = $('downloadUrl').value.trim(); if (!url) { setDownloadStatus('Cole um link antes de iniciar.', true); $('downloadUrl').focus(); return; }
   if (!folders.length) { setDownloadStatus('Adicione primeiro uma pasta monitorada nas configurações.', true); return; }
   let parsed; try { parsed = new URL(url); } catch { setDownloadStatus('Cole um link HTTP ou HTTPS válido.', true); return; }
-  const job = { title: `${parsed.hostname}${parsed.pathname}`.slice(0, 140), message: 'Iniciando o processo oculto…', status: 'running', percent: 0 }; currentDownloadJob = job; downloadJobs.push(job); renderDownloadJobs();
+  const job = { title: `${parsed.hostname}${parsed.pathname}`.slice(0, 140), message: 'Analisando o link…', status: 'running', tracks: [] }; currentDownloadJob = job; downloadJobs.push(job); if (downloadJobs.length > 20) downloadJobs.shift(); renderDownloadJobs();
   $('downloadStartButton').disabled = true; setDownloadStatus('O yt-dlp está executando em segundo plano. Esta janela permanece disponível.');
   const result = await window.isotopus.downloadAudio({ url, folder: $('downloadFolder').value });
   $('downloadStartButton').disabled = folders.length === 0;
-  if (result?.ok) { job.status = 'done'; job.percent = 100; job.message = `Salvo em ${$('downloadFolder').value}`; setDownloadStatus('Download concluído. A pasta monitorada atualizará sua biblioteca automaticamente.'); $('downloadUrl').value = ''; }
+  if (result?.ok) { job.status = result.partial ? 'partial' : 'done'; job.message = result.playlistTruncated ? 'Limite de segurança: foram baixados apenas os primeiros 100 itens da playlist.' : result.partial ? `${result.errorCount} faixa(s) não puderam ser baixadas; as demais foram salvas.` : `Salvo em ${$('downloadFolder').value}`; setDownloadStatus(result.partial ? job.message : 'Download concluído. A pasta monitorada atualizará sua biblioteca automaticamente.', result.partial); $('downloadUrl').value = ''; }
   else if (result?.cancelled) { job.status = 'error'; job.message = 'Download cancelado.'; setDownloadStatus('Download cancelado.'); }
   else { job.status = 'error'; job.message = result?.error || 'O download falhou.'; setDownloadStatus(job.message, true); }
+  for (const trackJob of job.tracks) if (trackJob.status === 'running' && result?.ok) { trackJob.status = 'done'; trackJob.percent = 100; }
+  if (!job.tracks.length && result?.error) job.tracks.push({ title: 'Download', status: 'error', percent: 0, message: result.error });
   currentDownloadJob = null; renderDownloadJobs();
 }
 async function checkForAppUpdate() {
@@ -334,6 +351,14 @@ function createTrackCard(item, items, kind) {
     else playTrack(item, items);
   });
   card.append(main);
+  if (item.kind === 'playlist') {
+    const actions = document.createElement('div'); actions.className = 'playlist-manage-actions';
+    const rename = document.createElement('button'); rename.type = 'button'; rename.className = 'playlist-manage-button'; rename.textContent = '✎'; rename.title = 'Renomear playlist'; rename.setAttribute('aria-label', `Renomear playlist ${item.title}`);
+    rename.addEventListener('click', event => { event.stopPropagation(); openPlaylistDialog(item.tracks.map(track => track.id), item.id); });
+    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'playlist-manage-button delete'; remove.textContent = '×'; remove.title = 'Excluir playlist'; remove.setAttribute('aria-label', `Excluir playlist ${item.title}`);
+    remove.addEventListener('click', event => { event.stopPropagation(); playlistDeletePendingId = item.id; $('deletePlaylistName').textContent = item.title; $('deletePlaylistDialog').showModal(); });
+    actions.append(rename, remove); card.append(actions);
+  }
   if ((kind === 'track' || kind === 'playlist-track') && item.id) {
     const inPlaylist = kind === 'playlist-track' || activeView.startsWith('playlist:');
     const action = document.createElement('button'); action.type = 'button'; action.className = `playlist-add${inPlaylist ? ' remove-from-playlist' : ''}`; action.textContent = inPlaylist ? '−' : '＋';
@@ -344,7 +369,21 @@ function createTrackCard(item, items, kind) {
       const playlist = playlists.find(entry => entry.id === activeView.slice('playlist:'.length));
       if (playlist) { playlist.trackIds = playlist.trackIds.filter(id => id !== item.id); savePlaylists(); openView(activeView, false); }
     });
-    card.append(action);
+    if (kind === 'playlist-track' && inPlaylist) {
+      const actions = document.createElement('div'); actions.className = 'playlist-track-actions';
+      const playlist = playlists.find(entry => entry.id === activeView.slice('playlist:'.length));
+      const index = playlist?.trackIds.indexOf(item.id) ?? -1;
+      const move = (delta, label, symbol) => {
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'playlist-order-button'; button.textContent = symbol; button.title = label; button.setAttribute('aria-label', `${label}: ${item.title}`); button.disabled = !playlist || index < 0 || index + delta < 0 || index + delta >= playlist.trackIds.length;
+        button.addEventListener('click', event => {
+          event.stopPropagation(); if (!playlist || button.disabled) return;
+          const other = index + delta; [playlist.trackIds[index], playlist.trackIds[other]] = [playlist.trackIds[other], playlist.trackIds[index]];
+          savePlaylists(); openView(activeView, false);
+        });
+        return button;
+      };
+      actions.append(move(-1, 'Mover para cima', '↑'), move(1, 'Mover para baixo', '↓'), action); card.append(actions);
+    } else card.append(action);
   }
   return card;
 }
@@ -421,10 +460,14 @@ function playlistTracks(playlist) {
   return playlist.trackIds.map(id => index.get(id)).filter(Boolean);
 }
 function savePlaylists() { store.set('playlists', JSON.stringify(playlists)); }
-function openPlaylistDialog(trackIds = []) {
+function openPlaylistDialog(trackIds = [], editId = '') {
+  playlistEditingId = editId;
   playlistDraftIds = [...new Set(trackIds)];
-  $('playlistName').value = '';
-  $('playlistDraftCount').textContent = playlistDraftIds.length ? `${playlistDraftIds.length} faixas serão adicionadas à playlist.` : 'Playlist vazia. Você poderá adicionar faixas depois.';
+  const existing = playlists.find(item => item.id === editId);
+  $('playlistDialogTitle').textContent = existing ? 'Renomear playlist' : 'Nova playlist';
+  $('savePlaylist').textContent = existing ? 'Salvar alterações' : 'Criar playlist';
+  $('playlistName').value = existing?.name || '';
+  $('playlistDraftCount').textContent = existing ? `${playlistDraftIds.length} faixas nesta playlist.` : playlistDraftIds.length ? `${playlistDraftIds.length} faixas serão adicionadas à playlist.` : 'Playlist vazia. Você poderá adicionar faixas depois.';
   $('playlistDialog').showModal(); $('playlistName').focus();
 }
 function openPlaylistPicker(track) {
@@ -454,7 +497,7 @@ function renderPlaylistCollection() {
   const results = $('dynamicResults');
   if (!results) return;
   const toolbar = document.createElement('div'); toolbar.className = 'queue-toolbar playlist-create-toolbar';
-  const label = document.createElement('span'); label.textContent = `${playlists.length} playlists`;
+  const label = document.createElement('span'); label.textContent = `${playlists.length} playlists · edite ou exclua pelos botões de cada cartão`;
   const create = document.createElement('button'); create.type = 'button'; create.className = 'secondary-button'; create.textContent = 'Nova playlist';
   create.addEventListener('click', () => openPlaylistDialog());
   toolbar.append(label, create); results.prepend(toolbar);
@@ -1064,9 +1107,18 @@ $('downloadUrl').addEventListener('keydown', event => { if (event.key === 'Enter
 window.isotopus.onDownloadProgress(data => {
   if (!currentDownloadJob) return;
   currentDownloadJob.message = data.message || currentDownloadJob.message;
-  if (Number.isFinite(data.percent)) currentDownloadJob.percent = data.percent;
-  if (data.status === 'done') { currentDownloadJob.percent = 100; currentDownloadJob.status = 'done'; }
-  if (data.status === 'error') currentDownloadJob.status = 'error';
+  if (data.itemId) {
+    let item = currentDownloadJob.tracks.find(trackJob => trackJob.id === data.itemId);
+    if (!item) { item = { id: data.itemId, title: data.title || 'Faixa', status: 'running', percent: 0, message: 'Preparando…' }; currentDownloadJob.tracks.push(item); }
+    if (data.title) item.title = data.title;
+    if (data.itemCount) { item.itemCount = data.itemCount; item.position = `${data.itemIndex || currentDownloadJob.tracks.length}/${data.itemCount}`; }
+    if (Number.isFinite(data.percent)) item.percent = data.percent;
+    if (data.event === 'item-done') { item.status = 'done'; item.percent = 100; item.message = 'Salva na pasta monitorada'; }
+    else if (data.event === 'item-error') { item.status = 'error'; item.message = data.message || 'Falha nesta faixa'; }
+    else { item.status = 'running'; item.message = data.message || (item.position ? `Faixa ${item.position}` : 'Baixando…'); }
+  }
+  if (data.status === 'done') { currentDownloadJob.message = data.message || currentDownloadJob.message; }
+  if (data.status === 'error') { currentDownloadJob.status = 'error'; for (const item of currentDownloadJob.tracks) if (item.status === 'running') item.status = 'error'; }
   renderDownloadJobs();
 });
 $('dismissUpdate').addEventListener('click', () => { $('updateBanner').hidden = true; if (updateRelease) store.set('dismissUpdate', updateRelease.latest); });
@@ -1254,12 +1306,27 @@ $('cancelPlaylist').addEventListener('click', () => $('playlistDialog').close())
 $('savePlaylist').addEventListener('click', () => {
   const name = $('playlistName').value.trim();
   if (!name) { toast('Dê um nome para a playlist.'); $('playlistName').focus(); return; }
-  if (playlists.some(item => normalizeSearch(item.name) === normalizeSearch(name))) { toast('Já existe uma playlist com esse nome.'); return; }
+  if (playlists.some(item => item.id !== playlistEditingId && normalizeSearch(item.name) === normalizeSearch(name))) { toast('Já existe uma playlist com esse nome.'); return; }
+  const editing = playlists.find(item => item.id === playlistEditingId);
+  if (editing) {
+    editing.name = name; savePlaylists(); $('playlistDialog').close(); playlistEditingId = '';
+    openView(activeView === `playlist:${editing.id}` ? activeView : 'playlists', false); toast(`Playlist renomeada para “${name}”.`); return;
+  }
   if (playlistPendingTrackId && !playlistDraftIds.includes(playlistPendingTrackId)) playlistDraftIds.push(playlistPendingTrackId);
   const id = globalThis.crypto?.randomUUID?.() || `playlist-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   playlists.unshift({ id, name, trackIds: [...playlistDraftIds] }); savePlaylists();
   $('playlistDialog').close(); playlistPendingTrackId = '';
   openView(`playlist:${id}`); toast(`Playlist “${name}” criada.`);
+});
+$('cancelDeletePlaylist').addEventListener('click', () => { $('deletePlaylistDialog').close(); playlistDeletePendingId = ''; });
+$('confirmDeletePlaylist').addEventListener('click', () => {
+  const deleted = playlists.find(item => item.id === playlistDeletePendingId);
+  if (!deleted) { $('deletePlaylistDialog').close(); playlistDeletePendingId = ''; return; }
+  playlists = playlists.filter(item => item.id !== deleted.id); savePlaylists(); $('deletePlaylistDialog').close(); playlistDeletePendingId = '';
+  if (activeView === `playlist:${deleted.id}`) openView('playlists', false);
+  else if (activeView === 'playlists') renderPlaylistCollection();
+  $('playlistCount').textContent = `${playlists.length} playlist${playlists.length === 1 ? '' : 's'}`;
+  toast(`Playlist “${deleted.name}” excluída. Os arquivos continuam na biblioteca.`);
 });
 function attachAudioDeck(deck) {
   deck.addEventListener('loadedmetadata', event => { if (event.currentTarget === audio) updateTimeline(); });
