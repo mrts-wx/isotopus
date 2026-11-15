@@ -1,3 +1,16 @@
+# Isótopus 0.2.7 — Atualização leve de desempenho
+
+Ajustes internos para reduzir trabalho repetido durante a reprodução e o uso da biblioteca, mantendo os recursos e o visual do Isótopus.
+
+- Capas e metadados de mídia são reutilizados durante a reprodução; atualizações de posição e letras fazem menos trabalho repetido.
+- Consultas de estatísticas usam um índice local e as imagens da biblioteca podem ser reaproveitadas pelo cache.
+- A sincronização local de letras usa menos cópias temporárias de áudio.
+- O brilho colorido continua alinhado às bordas arredondadas originais das docks, controles e cards.
+
+Sem novos recursos ou dependências nesta versão.
+
+---
+
 # Isótopus 0.2.6 — Major Update: expansão funcional e refinamento visual
 
 A versão 0.2.6 amplia o controle da reprodução e acrescenta recursos locais de descoberta, organização e acompanhamento da biblioteca. As mudanças preservam a identidade visual atual e reutilizam a mesma sessão de áudio.

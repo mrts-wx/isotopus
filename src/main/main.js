@@ -115,13 +115,15 @@ function openMiniPlayerWindow() {
   if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) { miniPlayerWindow.show(); miniPlayerWindow.focus(); return; }
   miniPlayerWindow = new BrowserWindow({ width: 430, height: 148, minWidth: 380, minHeight: 90, maxWidth: 560, maxHeight: 210, frame: false, transparent: true, resizable: true, alwaysOnTop: false, show: false, backgroundColor: '#00000000', webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: true } });
   miniPlayerWindow.loadURL(`http://127.0.0.1:${serverPort}/renderer/mini-player.html`);
-  miniPlayerWindow.once('ready-to-show', () => { miniPlayerWindow?.show(); win?.webContents.send('mini-player:request-state'); });
+  miniPlayerWindow.once('ready-to-show', () => miniPlayerWindow?.show());
+  miniPlayerWindow.on('show', () => { win?.webContents.send('mini-player:visibility', true); win?.webContents.send('mini-player:request-state'); });
+  miniPlayerWindow.on('hide', () => win?.webContents.send('mini-player:visibility', false));
   miniPlayerWindow.on('closed', () => { miniPlayerWindow = null; });
   miniPlayerWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 }
 ipcMain.handle('mini-player:open', event => { if (event.sender !== win?.webContents) return false; openMiniPlayerWindow(); return true; });
 ipcMain.on('mini-player:state', (event, state) => {
-  if (event.sender !== win?.webContents || !miniPlayerWindow || miniPlayerWindow.isDestroyed()) return;
+  if (event.sender !== win?.webContents || !miniPlayerWindow || miniPlayerWindow.isDestroyed() || !miniPlayerWindow.isVisible()) return;
   miniPlayerWindow.webContents.send('mini-player:state', state);
 });
 ipcMain.on('mini-player:request-state', event => { if (event.sender === miniPlayerWindow?.webContents) win?.webContents.send('mini-player:request-state'); });

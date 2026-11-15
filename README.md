@@ -22,7 +22,7 @@ Player de música local para Linux e Windows, feito para organizar e ouvir uma c
 - Aviso de novas versões com link para o instalador apropriado de Ubuntu/Debian, Arch ou Windows.
 - Pacotes de distribuição para Debian/Ubuntu, Arch e Windows.
 
-O editor de metadados diretamente nos arquivos não está incluído na 0.2.6: o projeto ainda não tem uma solução segura de escrita multiplataforma para todos os formatos que lê.
+O editor de metadados diretamente nos arquivos ainda não está incluído: o projeto ainda não tem uma solução segura de escrita multiplataforma para todos os formatos que lê.
 
 O app identifica o codec armazenado, mas não consegue verificar se um arquivo lossless veio de uma fonte sem perdas. A saída de áudio também pode ser mixada ou reamostrada pelo sistema operacional.
 
@@ -67,7 +67,7 @@ Baixe o instalador da versão desejada na página **Releases** do repositório e
 - **Debian ou Ubuntu:** baixe `Isotopus-<versão>-amd64.deb`, abra um terminal na pasta do download e rode `sudo apt install ./Isotopus-<versão>-amd64.deb`. O `apt` instala o pacote e tenta resolver as dependências.
 - **Arch Linux:** baixe `Isotopus-<versão>-x64.pacman` e rode `sudo pacman -U ./Isotopus-<versão>-x64.pacman` no terminal, dentro da pasta do download.
 
-Substitua `<versão>` pelo número publicado, como `0.2.6`. Nem toda versão tem instalador para todos os sistemas; use um arquivo que esteja anexado à Release daquela versão. O [CHANGELOG](CHANGELOG.md) resume as mudanças da versão mais recente; cada Release também apresenta as notas daquela versão.
+Substitua `<versão>` pelo número publicado, como `0.2.7`. Nem toda versão tem instalador para todos os sistemas; use um arquivo que esteja anexado à Release daquela versão. O [CHANGELOG](CHANGELOG.md) resume as mudanças da versão mais recente; cada Release também apresenta as notas daquela versão.
 
 ### Sobre avisos de segurança
 

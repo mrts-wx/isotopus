@@ -41,6 +41,7 @@ contextBridge.exposeInMainWorld('isotopus', {
   openMiniPlayer: () => ipcRenderer.invoke('mini-player:open'),
   publishMiniPlayerState: state => ipcRenderer.send('mini-player:state', state),
   onMiniPlayerCommand: callback => { const listener = (_event, data) => callback(data); ipcRenderer.on('mini-player:command', listener); return () => ipcRenderer.removeListener('mini-player:command', listener); },
+  onMiniPlayerVisibility: callback => { const listener = (_event, visible) => callback(Boolean(visible)); ipcRenderer.on('mini-player:visibility', listener); return () => ipcRenderer.removeListener('mini-player:visibility', listener); },
   onMiniPlayerRequestState: callback => { const listener = () => callback(); ipcRenderer.on('mini-player:request-state', listener); return () => ipcRenderer.removeListener('mini-player:request-state', listener); },
   onMiniPlayerState: callback => { const listener = (_event, data) => callback(data); ipcRenderer.on('mini-player:state', listener); return () => ipcRenderer.removeListener('mini-player:state', listener); },
   requestMiniPlayerState: () => ipcRenderer.send('mini-player:request-state'),

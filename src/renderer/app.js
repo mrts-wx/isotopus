@@ -25,7 +25,11 @@ let queue = [];
 let queueIndex = -1;
 const failedTracks = new Set();
 let currentTrack = null;
+let miniPlayerVisible = false;
 let listeningSession = null;
+let mediaSessionTrackId = null;
+let mediaSessionPlaybackState = null;
+let lastMediaPositionUpdate = 0;
 let playlists = [];
 let playlistDraftIds = [];
 let playlistPendingTrackId = '';
@@ -49,12 +53,21 @@ const safeObject = key => { try { const value = JSON.parse(store.get(key) || '{}
 const normalizeSearch = value => String(value || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('pt-BR').trim();
 let listeningStats = safeObject('listeningStats');
 if (!Array.isArray(listeningStats.sessions)) listeningStats = { sessions: [] };
+const completedPlayCounts = new Map();
+function rebuildCompletedPlayCounts() {
+  completedPlayCounts.clear();
+  for (const session of listeningStats.sessions) {
+    if (session?.completed && session.id) completedPlayCounts.set(session.id, (completedPlayCounts.get(session.id) || 0) + 1);
+  }
+}
+rebuildCompletedPlayCounts();
 let lastStatsPersist = 0;
 let smartFolders = safeArray('smartFolders').filter(folder => folder && typeof folder.id === 'string' && typeof folder.name === 'string' && Array.isArray(folder.rules));
 let smartFolderEditingId = '';
 
 function saveListeningStats() {
   listeningStats.sessions = listeningStats.sessions.slice(-1000);
+  rebuildCompletedPlayCounts();
   store.set('listeningStats', JSON.stringify(listeningStats));
 }
 function persistListeningSession() {
@@ -84,7 +97,7 @@ function sessionsForPeriod(period = 'all') {
   const cutoff = period === '30' ? Date.now() - 30 * 86400000 : period === '365' ? Date.now() - 365 * 86400000 : 0;
   return listeningStats.sessions.filter(item => Number(item.startedAt) >= cutoff);
 }
-function statsForTrack(id) { return listeningStats.sessions.filter(item => item.id === id && item.completed).length; }
+function statsForTrack(id) { return completedPlayCounts.get(id) || 0; }
 function matchesSmartFolder(track, folder) {
   return folder.rules.every(rule => {
     const field = rule.field === 'plays' ? String(statsForTrack(track.id)) : String(track[rule.field] ?? '');
@@ -331,6 +344,9 @@ function showCoverFallback(element) {
 function coverStyle(track, element) {
   const source = typeof track?.coverUrl === 'string' ? track.coverUrl.trim() : '';
   element.style.removeProperty('background-image');
+  const currentImage = element.querySelector('.cover-image');
+  if (source && currentImage?.getAttribute('src') === source) { element.classList.remove('missing-cover'); return; }
+  if (!source && element.classList.contains('missing-cover') && element.querySelector('.cover-fallback')) return;
   element.replaceChildren();
   if (!source) { showCoverFallback(element); return; }
   element.classList.remove('missing-cover');
@@ -517,7 +533,7 @@ function renderAboutPage() {
   root.replaceChildren(); visibleTracks = [];
   const title = document.createElement('h2'); title.textContent = 'Música local, no seu ritmo.';
   const manifesto = document.createElement('blockquote'); manifesto.textContent = 'O Isótopus nasceu da ideia de que a música deve pertencer a quem a escuta. Uma biblioteca musical livre, local e pessoal, sem dependência de plataformas, assinaturas ou serviços externos. Sua música, seu computador, sua experiência.';
-  const info = document.createElement('dl'); const rows = [['Versão', '0.2.6'], ['Tecnologias', 'Electron · music-metadata · @huggingface/transformers'], ['Projeto', 'mrts-wx/isotopus'], ['Licença', 'MIT — consulte o arquivo LICENSE no repositório. Dependências de terceiros mantêm suas próprias licenças.'], ['Créditos', 'Criado por omartinss · Desenvolvimento assistido por Codex (OpenAI). Projeto independente, sem afiliação ou endosso da OpenAI.']];
+  const info = document.createElement('dl'); const rows = [['Versão', '0.2.7'], ['Tecnologias', 'Electron · music-metadata · @huggingface/transformers'], ['Projeto', 'mrts-wx/isotopus'], ['Licença', 'MIT — consulte o arquivo LICENSE no repositório. Dependências de terceiros mantêm suas próprias licenças.'], ['Créditos', 'Criado por omartinss · Desenvolvimento assistido por Codex (OpenAI). Projeto independente, sem afiliação ou endosso da OpenAI.']];
   rows.forEach(([term, value]) => { const dt = document.createElement('dt'); dt.textContent = term; const dd = document.createElement('dd'); dd.textContent = value; info.append(dt, dd); });
   const link = document.createElement('a'); link.href = 'https://github.com/mrts-wx/isotopus'; link.textContent = 'Repositório oficial no GitHub'; link.target = '_blank'; link.rel = 'noreferrer'; root.append(title, manifesto, info, link);
 }
@@ -900,6 +916,7 @@ function renderCurrentTrack() {
   publishMiniPlayerState();
 }
 function publishMiniPlayerState() {
+  if (!miniPlayerVisible) return;
   window.isotopus.publishMiniPlayerState({ track: currentTrack ? { title: currentTrack.title, artist: currentTrack.artist, album: currentTrack.album, coverUrl: currentTrack.coverUrl || '' } : null, playing: Boolean(currentTrack && !audio.paused), currentTime: Number(audio.currentTime) || 0, duration: Number(audio.duration) || Number(currentTrack?.duration) || 0, volume: Math.round(baseVolume * 100), dark: document.body.classList.contains('dark-theme'), surfaceStyle: document.body.dataset.surfaceStyle || 'normal', dynamic: store.get('dynamicColors') === 'yes', tone: document.body.style.getPropertyValue('--cover-tone') || '' });
 }
 function updateCrossfadeVolumes(progress) {
@@ -954,11 +971,21 @@ function updateMediaSession() {
   const session = navigator.mediaSession;
   if (!session) return;
   try {
-    if (currentTrack && typeof MediaMetadata !== 'undefined') {
-      session.metadata = new MediaMetadata({ title: currentTrack.title, artist: currentTrack.artist, album: currentTrack.album, artwork: [{ src: currentTrack.coverUrl || '../assets/icons/512x512.png', sizes: '512x512', type: 'image/png' }] });
-    } else session.metadata = null;
-    session.playbackState = currentTrack ? (audio.paused ? 'paused' : 'playing') : 'none';
-    if (Number.isFinite(audio.duration) && audio.duration > 0 && typeof session.setPositionState === 'function') session.setPositionState({ duration: audio.duration, playbackRate: audio.playbackRate || 1, position: Math.min(audio.currentTime || 0, audio.duration) });
+    const trackId = currentTrack?.id || null;
+    if (trackId !== mediaSessionTrackId) {
+      mediaSessionTrackId = trackId;
+      if (currentTrack && typeof MediaMetadata !== 'undefined') {
+        session.metadata = new MediaMetadata({ title: currentTrack.title, artist: currentTrack.artist, album: currentTrack.album, artwork: [{ src: currentTrack.coverUrl || '../assets/icons/512x512.png', sizes: '512x512', type: 'image/png' }] });
+      } else session.metadata = null;
+      lastMediaPositionUpdate = 0;
+    }
+    const playbackState = currentTrack ? (audio.paused ? 'paused' : 'playing') : 'none';
+    if (playbackState !== mediaSessionPlaybackState) { session.playbackState = playbackState; mediaSessionPlaybackState = playbackState; }
+    const now = performance.now();
+    if (Number.isFinite(audio.duration) && audio.duration > 0 && typeof session.setPositionState === 'function' && now - lastMediaPositionUpdate >= 1000) {
+      session.setPositionState({ duration: audio.duration, playbackRate: audio.playbackRate || 1, position: Math.min(audio.currentTime || 0, audio.duration) });
+      lastMediaPositionUpdate = now;
+    }
   } catch {}
 }
 function rememberTrack(track) {
@@ -1164,8 +1191,11 @@ function updateLyricsHighlight(forceScroll = false) {
   const position = Math.max(0, audio.currentTime - offset);
   let next = -1;
   for (let i = 0; i < currentLyrics.lines.length; i++) if (currentLyrics.lines[i].time != null && currentLyrics.lines[i].time <= position) next = i;
+  if (!forceScroll && next === activeLyricIndex) return;
   const rows = $('lyricsLines').querySelectorAll('.lyrics-line');
-  rows.forEach(row => row.classList.remove('active', 'lyrics-neighbor'));
+  for (const index of [activeLyricIndex - 1, activeLyricIndex, activeLyricIndex + 1]) {
+    if (index >= 0) rows[index]?.classList.remove('active', 'lyrics-neighbor');
+  }
   if (next >= 0) {
     rows[next]?.classList.add('active');
     rows[next - 1]?.classList.add('lyrics-neighbor');
@@ -1267,19 +1297,24 @@ async function decodeCurrentTrackForAlignment(track) {
   if (!response.ok) throw new Error('Não consegui abrir o arquivo de áudio local.');
   const contentLength = Number(response.headers.get('content-length')) || 0;
   if (contentLength > 160 * 1024 * 1024) throw new Error('Este arquivo é grande demais para a sincronização automática nesta versão de teste.');
-  const encodedAudio = await response.arrayBuffer();
+  let encodedAudio = await response.arrayBuffer();
   if (encodedAudio.byteLength > 160 * 1024 * 1024) throw new Error('Este arquivo é grande demais para a sincronização automática nesta versão de teste.');
-  const decoder = new (window.AudioContext || window.webkitAudioContext)();
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  let decoder;
+  try { decoder = new AudioContextClass({ sampleRate: 16000 }); }
+  catch { decoder = new AudioContextClass(); }
   let decoded;
-  try { decoded = await decoder.decodeAudioData(encodedAudio.slice(0)); }
+  try { decoded = await decoder.decodeAudioData(encodedAudio); }
   catch { throw new Error('Este formato não pôde ser decodificado para análise neste computador.'); }
-  finally { await decoder.close().catch(() => {}); }
+  finally { encodedAudio = null; await decoder.close().catch(() => {}); }
   if (decoded.duration > 600) throw new Error('A sincronização automática aceita faixas de até 10 minutos nesta versão de teste.');
   const sampleRate = 16000, sampleCount = Math.ceil(decoded.duration * sampleRate);
   const resampler = new OfflineAudioContext(1, sampleCount, sampleRate);
   const source = resampler.createBufferSource(); source.buffer = decoded; source.connect(resampler.destination); source.start();
   const mono = await resampler.startRendering();
-  return { samples: mono.getChannelData(0).slice(), duration: decoded.duration };
+  const duration = decoded.duration;
+  decoded = null;
+  return { samples: mono.getChannelData(0), duration };
 }
 function confirmAutomaticLyricsSync() {
   const dialog = $('lyricsAutoSyncConfirmDialog');
@@ -1312,7 +1347,11 @@ async function runAutomaticLyricsSync() {
     if (lyricsTrackId !== trackId) return;
     setLyricsStatus('Iniciando análise em segundo plano. Você pode continuar usando o Isótopus.');
     const model = ['tiny', 'base', 'small'].includes(store.get('whisperModel')) ? store.get('whisperModel') : 'small';
-    const result = await window.isotopus.alignLyrics(trackId, decoded.samples, currentLyrics.lines.map(line => line.text), decoded.duration, model);
+    let samples = decoded.samples;
+    decoded.samples = null;
+    const alignment = window.isotopus.alignLyrics(trackId, samples, currentLyrics.lines.map(line => line.text), decoded.duration, model);
+    samples = null;
+    const result = await alignment;
     if (lyricsTrackId !== trackId) return;
     if (!result?.ok) { setLyricsStatus(result?.cancelled ? 'Análise cancelada.' : result?.error || 'Não foi possível sincronizar esta letra.'); return; }
     const formatted = window.IsotopusLyrics.formatLyrics(result.lines);
@@ -1651,6 +1690,7 @@ window.isotopus.onMiniPlayerCommand(command => {
   else if (command.type === 'volume') { $('volume').value = String(Math.round(command.value)); $('volume').dispatchEvent(new Event('input')); }
 });
 window.isotopus.onMiniPlayerRequestState(publishMiniPlayerState);
+window.isotopus.onMiniPlayerVisibility?.(visible => { miniPlayerVisible = Boolean(visible); if (miniPlayerVisible) publishMiniPlayerState(); });
 document.addEventListener('pointerdown', event => {
   if (!$('queuePopover').hidden && !event.target.closest('#queuePopover') && !event.target.closest('#queueToggle')) {
     $('queuePopover').hidden = true; $('queueToggle').setAttribute('aria-expanded', 'false');
@@ -1733,7 +1773,8 @@ $('confirmDeletePlaylist').addEventListener('click', () => {
   toast(`Playlist “${deleted.name}” excluída. Os arquivos continuam na biblioteca.`);
 });
 function attachAudioDeck(deck) {
-  deck.addEventListener('loadedmetadata', event => { if (event.currentTarget === audio) updateTimeline(); });
+  deck.addEventListener('loadedmetadata', event => { if (event.currentTarget === audio) { lastMediaPositionUpdate = 0; updateTimeline(); updateMediaSession(); } });
+  deck.addEventListener('seeked', event => { if (event.currentTarget === audio) { lastMediaPositionUpdate = 0; updateMediaSession(); } });
   deck.addEventListener('timeupdate', event => {
     if (event.currentTarget !== audio) return;
     updateTimeline(); updateMediaSession(); recordListeningProgress(); beginCrossfade();

@@ -47,6 +47,7 @@ async function parseTrack(file, stat, parseFile) {
     const codec = asText(format.codec || format.container || ext.slice(1)).toUpperCase();
     const pic = common.picture?.[0];
     const coverId = pic?.data ? `c${idFor(`${asText(common.albumArtist || common.artist)}|${asText(common.album)}`)}` : '';
+    const coverVersion = pic?.data ? idFor(pic.data) : '';
     return {
       id: idFor(file), title: asText(common.title) || path.basename(file, ext),
       artist: asText(common.artist) || 'Artista desconhecido', albumArtist: asText(common.albumartist || common.albumArtist),
@@ -55,7 +56,7 @@ async function parseTrack(file, stat, parseFile) {
       sampleRate: Number(format.sampleRate) || 0, bitDepth: Number(format.bitsPerSample) || 0,
       bitrate: Number(format.bitrate) || 0, trackNo: common.track?.no || null, discNo: common.disk?.no || null,
       genre: asText(common.genre), year: common.year || null, size: stat.size, modified: stat.mtimeMs,
-      pathLabel: path.basename(file), coverId,
+      pathLabel: path.basename(file), coverId, coverVersion,
       coverBuffer: pic?.data ? Buffer.from(pic.data) : null, coverType: pic?.format || 'image/jpeg'
     };
   } catch { return fallbackTrack(file, stat); }
@@ -145,7 +146,7 @@ function createLibrary(cacheDirectory) {
             delete track.coverType;
           }
           track.streamUrl = `${origin}/media/${audioId}`;
-          track.coverUrl = track.coverId ? `${origin}/media/${track.coverId}` : '';
+      track.coverUrl = track.coverId ? `${origin}/media/${track.coverId}?v=${track.coverVersion || track.coverId}` : '';
           cache.set(file, { signature, track, playbackPath });
           tracks[index] = track;
         } catch { tracks[index] = null; }

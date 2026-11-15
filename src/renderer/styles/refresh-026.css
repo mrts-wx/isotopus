@@ -59,12 +59,7 @@ body>.app-shell{height:100vh!important;min-height:0!important;flex:1 1 auto!impo
 body>.app-shell>.sidebar{margin-bottom:104px!important}
 body>.player-bar{position:fixed!important;left:12px!important;right:12px!important;bottom:12px!important;z-index:70!important;width:auto!important;height:92px!important;min-height:92px!important;flex:none!important;margin:0!important}
 body>.app-shell>.main-area>.content{padding-bottom:148px!important}
-/* Cover-tone neon is limited to docks and transport controls; it never recolors cards. */
-@keyframes cover-neon-dock{0%,100%{box-shadow:var(--fresh-shadow),0 0 7px 1px color-mix(in srgb,var(--cover-tone,#ff6e4a) 24%,transparent)}50%{box-shadow:var(--fresh-shadow),0 0 17px 3px color-mix(in srgb,var(--cover-tone,#ff6e4a) 48%,transparent)}}
-@keyframes cover-neon-control{0%,100%{box-shadow:0 0 0 1px color-mix(in srgb,var(--cover-tone,#ff6e4a) 30%,transparent),0 0 5px color-mix(in srgb,var(--cover-tone,#ff6e4a) 22%,transparent)}50%{box-shadow:0 0 0 1.5px color-mix(in srgb,var(--cover-tone,#ff6e4a) 75%,transparent),0 0 12px color-mix(in srgb,var(--cover-tone,#ff6e4a) 52%,transparent)}}
-body.dynamic-colors .sidebar,body.dynamic-colors .player-bar{border-color:color-mix(in srgb,var(--cover-tone,#ff6e4a) 62%,var(--fresh-line))!important;animation:cover-neon-dock 3.2s ease-in-out infinite}
-body.dynamic-colors .player-bar .transport-button,body.dynamic-colors .player-bar .play-button,body.dynamic-colors .player-tools>.queue-toggle{border:1px solid color-mix(in srgb,var(--cover-tone,#ff6e4a) 48%,var(--fresh-line))!important;animation:cover-neon-control 2.8s ease-in-out infinite}
-@media(prefers-reduced-motion:reduce){body.dynamic-colors .sidebar,body.dynamic-colors .player-bar,body.dynamic-colors .player-bar .transport-button,body.dynamic-colors .player-bar .play-button,body.dynamic-colors .player-tools>.queue-toggle{animation:none!important}body.dynamic-colors .sidebar,body.dynamic-colors .player-bar{box-shadow:var(--fresh-shadow),0 0 10px color-mix(in srgb,var(--cover-tone,#ff6e4a) 35%,transparent)}}
+/* Cover-tone neon stays on the dock/control edges, without animating expensive shadows. */
 
 /* 0.2.6 acrylic refinement: keep one continuous content plane behind both docks. */
 @media(min-width:900px){
@@ -106,16 +101,16 @@ body:not(.dark-theme)[data-surface-style="mica"] .settings-dialog :is(.settings-
 body:not(.dark-theme)[data-surface-style="glass"] .settings-dialog :is(.settings-category-description,.setting-row small,.field-help,.dialog-content p),
 body:not(.dark-theme)[data-surface-style="mica"] .appearance-dialog :is(small,p),
 body:not(.dark-theme)[data-surface-style="glass"] .appearance-dialog :is(small,p){color:#403b43!important}
-/* Neon stays on the edge; remove the external glow that leaked beyond the dock. */
+/* Animate the original inset edge directly so its glow follows each rounded border. */
 @keyframes cover-neon-dock-inset{0%,100%{box-shadow:var(--fresh-shadow),inset 0 0 0 1px color-mix(in srgb,var(--cover-tone,#ff6e4a) 32%,transparent),inset 0 0 12px color-mix(in srgb,var(--cover-tone,#ff6e4a) 9%,transparent)}50%{box-shadow:var(--fresh-shadow),inset 0 0 0 1.5px color-mix(in srgb,var(--cover-tone,#ff6e4a) 76%,transparent),inset 0 0 18px color-mix(in srgb,var(--cover-tone,#ff6e4a) 15%,transparent)}}
 @keyframes cover-neon-control-inset{0%,100%{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cover-tone,#ff6e4a) 34%,transparent)}50%{box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--cover-tone,#ff6e4a) 78%,transparent)}}
 body.dynamic-colors .sidebar,body.dynamic-colors .player-bar{animation:cover-neon-dock-inset 3.2s ease-in-out infinite!important}
 body.dynamic-colors .player-bar .transport-button,body.dynamic-colors .player-bar .play-button,body.dynamic-colors .player-tools>.queue-toggle{animation:cover-neon-control-inset 2.8s ease-in-out infinite!important}
-@media(prefers-reduced-motion:reduce){body.dynamic-colors .sidebar,body.dynamic-colors .player-bar{animation:none!important;box-shadow:var(--fresh-shadow),inset 0 0 0 1px color-mix(in srgb,var(--cover-tone,#ff6e4a) 50%,transparent)!important}}
+@media(prefers-reduced-motion:reduce){body.dynamic-colors .sidebar,body.dynamic-colors .player-bar,body.dynamic-colors .player-bar .transport-button,body.dynamic-colors .player-bar .play-button,body.dynamic-colors .player-tools>.queue-toggle{animation:none!important}body.dynamic-colors .sidebar,body.dynamic-colors .player-bar{box-shadow:var(--fresh-shadow),inset 0 0 0 1px color-mix(in srgb,var(--cover-tone,#ff6e4a) 50%,transparent)!important}}
 @media(max-width:899px){body>.app-shell>.main-area{margin-left:0;padding-left:0}}
 /* Give the two fixed docks visible breathing room. */
 body>.app-shell>.sidebar{margin-bottom:120px!important}
-/* The same cover-color outline follows the inner edge of music and library cards. */
+/* The same cover glow follows the cards' native rounded edges, without overlay borders. */
 @keyframes cover-neon-card-inset{0%,100%{box-shadow:var(--fresh-shadow),inset 0 0 0 1px color-mix(in srgb,var(--cover-tone,#ff6e4a) 30%,transparent),inset 0 0 12px color-mix(in srgb,var(--cover-tone,#ff6e4a) 8%,transparent)}50%{box-shadow:var(--fresh-shadow),inset 0 0 0 1.5px color-mix(in srgb,var(--cover-tone,#ff6e4a) 72%,transparent),inset 0 0 18px color-mix(in srgb,var(--cover-tone,#ff6e4a) 13%,transparent)}}
 body.dynamic-colors :is(.result-card,.quick-card,.stats-metric,.stats-chart-panel,.smart-folder-card,.about-page,.lossless-empty,.home-listening,.inspiration-row){border-color:color-mix(in srgb,var(--cover-tone,#ff6e4a) 42%,var(--fresh-line));animation:cover-neon-card-inset 3.4s ease-in-out infinite}
 @media(prefers-reduced-motion:reduce){body.dynamic-colors :is(.result-card,.quick-card,.stats-metric,.stats-chart-panel,.smart-folder-card,.about-page,.lossless-empty,.home-listening,.inspiration-row){animation:none!important;box-shadow:var(--fresh-shadow),inset 0 0 0 1px color-mix(in srgb,var(--cover-tone,#ff6e4a) 48%,transparent)!important}}

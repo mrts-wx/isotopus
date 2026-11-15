@@ -1,5 +1,6 @@
 const $ = id => document.getElementById(id);
 let compact = false;
+let renderedCoverUrl = null;
 
 function fmt(seconds) {
   const value = Math.max(0, Math.floor(Number(seconds) || 0));
@@ -19,12 +20,17 @@ function update(state) {
     ? `${state.track.artist || ''}${state.track.album ? ` · ${state.track.album}` : ''}`
     : 'Abra uma música no player principal';
   const cover = $('miniCover');
-  cover.replaceChildren();
-  if (state.track?.coverUrl) {
-    const image = document.createElement('img');
-    image.alt = '';
-    image.src = state.track.coverUrl;
-    cover.append(image);
+  const coverUrl = state.track?.coverUrl || '';
+  if (coverUrl !== renderedCoverUrl) {
+    renderedCoverUrl = coverUrl;
+    if (coverUrl) {
+      const image = document.createElement('img');
+      image.alt = '';
+      image.src = coverUrl;
+      cover.replaceChildren(image);
+    } else {
+      cover.replaceChildren();
+    }
   }
 
   $('miniPlay').textContent = state.playing ? 'Ⅱ' : '▶';

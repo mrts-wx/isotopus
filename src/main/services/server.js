@@ -41,7 +41,8 @@ function createStaticServer(root, resolveAsset = () => null) {
 function serveResource(req, res, resource) {
   const file = resource.path;
   const contentType = resource.contentType || mime[path.extname(file || '').toLowerCase()] || 'application/octet-stream';
-  const baseHeaders = { 'Content-Type': contentType, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
+  const cacheControl = contentType.startsWith('image/') ? 'private, max-age=86400' : 'no-store';
+  const baseHeaders = { 'Content-Type': contentType, 'Accept-Ranges': 'bytes', 'Cache-Control': cacheControl, 'X-Content-Type-Options': 'nosniff' };
   if (resource.buffer) {
     const buffer = resource.buffer;
     const range = req.headers.range;
