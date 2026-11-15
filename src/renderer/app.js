@@ -1,4 +1,5 @@
 const $ = id => document.getElementById(id);
+const seekVisualizers = [...document.querySelectorAll('.seek-visualizer')];
 const durableStore = new Map(Object.entries(window.isotopus.getPersistentStore?.() || {}));
 const store = {
   get: key => durableStore.get(key) || '',
@@ -37,6 +38,7 @@ let playlistEditingId = '';
 let playlistDeletePendingId = '';
 let trackDeletePendingId = '';
 let currentLyrics = { raw: '', synced: false, lines: [], source: '' };
+let timedLyricsIndex = [];
 let lyricsTrackId = '';
 let manualLyricsMode = false;
 let manualRedoPending = false;
@@ -533,7 +535,7 @@ function renderAboutPage() {
   root.replaceChildren(); visibleTracks = [];
   const title = document.createElement('h2'); title.textContent = 'Música local, no seu ritmo.';
   const manifesto = document.createElement('blockquote'); manifesto.textContent = 'O Isótopus nasceu da ideia de que a música deve pertencer a quem a escuta. Uma biblioteca musical livre, local e pessoal, sem dependência de plataformas, assinaturas ou serviços externos. Sua música, seu computador, sua experiência.';
-  const info = document.createElement('dl'); const rows = [['Versão', '0.2.7'], ['Tecnologias', 'Electron · music-metadata · @huggingface/transformers'], ['Projeto', 'mrts-wx/isotopus'], ['Licença', 'MIT — consulte o arquivo LICENSE no repositório. Dependências de terceiros mantêm suas próprias licenças.'], ['Créditos', 'Criado por omartinss · Desenvolvimento assistido por Codex (OpenAI). Projeto independente, sem afiliação ou endosso da OpenAI.']];
+  const info = document.createElement('dl'); const rows = [['Versão', '0.2.8'], ['Tecnologias', 'Electron · music-metadata · @huggingface/transformers'], ['Projeto', 'mrts-wx/isotopus'], ['Licença', 'MIT — consulte o arquivo LICENSE no repositório. Dependências de terceiros mantêm suas próprias licenças.'], ['Créditos', 'Criado por omartinss · Desenvolvimento assistido por Codex (OpenAI). Projeto independente, sem afiliação ou endosso da OpenAI.']];
   rows.forEach(([term, value]) => { const dt = document.createElement('dt'); dt.textContent = term; const dd = document.createElement('dd'); dd.textContent = value; info.append(dt, dd); });
   const link = document.createElement('a'); link.href = 'https://github.com/mrts-wx/isotopus'; link.textContent = 'Repositório oficial no GitHub'; link.target = '_blank'; link.rel = 'noreferrer'; root.append(title, manifesto, info, link);
 }
@@ -1062,10 +1064,10 @@ function updateTimeline() {
   $('lyricsSeek').max = duration || 100; $('lyricsSeek').value = Math.min(audio.currentTime || 0, duration || 100);
   const progress = Number($('seek').value) / Math.max(1, Number($('seek').max)) * 100;
   const safeProgress = Math.max(0, Math.min(100, progress));
-  document.querySelectorAll('.seek-visualizer').forEach(track => {
+  for (const track of seekVisualizers) {
     track.style.setProperty('--seek-progress', safeProgress);
     track.style.setProperty('--seek-percent', `${safeProgress}%`);
-  });
+  }
   $('elapsed').textContent = fmt(audio.currentTime); $('duration').textContent = fmt(duration);
   $('lyricsElapsed').textContent = fmt(audio.currentTime); $('lyricsDuration').textContent = fmt(duration);
   updateLyricsHighlight();
@@ -1091,10 +1093,17 @@ function showLyricsActions() {
   const paste = document.createElement('button'); paste.type = 'button'; paste.className = 'secondary-button'; paste.textContent = 'Colar letra copiada'; paste.addEventListener('click', openLyricsPasteDialog);
   actions.append(web, paste); $('lyricsLines').append(actions);
 }
+function rebuildTimedLyricsIndex() {
+  timedLyricsIndex = currentLyrics.lines
+    .map((line, index) => ({ index, time: Number(line.time) }))
+    .filter(item => Number.isFinite(item.time) && item.time >= 0)
+    .sort((a, b) => a.time - b.time || a.index - b.index);
+}
 function applyLyricsText(raw, source = 'Letra adicionada') {
   const parsed = window.IsotopusLyrics.parseLyrics(raw);
   const origin = /arquivo local/i.test(source) ? 'local-lrc' : /whisper|automaticamente com o áudio/i.test(source) ? 'whisper' : /lrclib/i.test(source) ? 'lrclib' : parsed.synced ? 'lrc-imported' : 'unsynced';
   currentLyrics = { raw: String(raw || ''), synced: parsed.synced, lines: parsed.lines, source, origin };
+  rebuildTimedLyricsIndex();
   manualLyricsMode = false; activeLyricIndex = -1;
   const savedOffset = Number(store.get(`lyricsOffset:${lyricsTrackId}`));
   $('lyricsOffset').value = Number.isFinite(savedOffset) ? Math.max(-10, Math.min(10, savedOffset)) : 0;
@@ -1132,6 +1141,7 @@ async function markLyricsLine(index) {
     $('lyricsOffset').value = '0'; $('lyricsOffset').dispatchEvent(new Event('input'));
   }
   line.time = Math.max(0, audio.currentTime || 0);
+  rebuildTimedLyricsIndex();
   currentLyrics.origin = 'manual';
   renderLyricsOrigin();
   const marked = currentLyrics.lines.filter(item => item.time != null).length;
@@ -1190,7 +1200,12 @@ function updateLyricsHighlight(forceScroll = false) {
   const offset = Number($('lyricsOffset').value) || 0;
   const position = Math.max(0, audio.currentTime - offset);
   let next = -1;
-  for (let i = 0; i < currentLyrics.lines.length; i++) if (currentLyrics.lines[i].time != null && currentLyrics.lines[i].time <= position) next = i;
+  let low = 0, high = timedLyricsIndex.length - 1;
+  while (low <= high) {
+    const middle = (low + high) >> 1;
+    if (timedLyricsIndex[middle].time <= position) { next = timedLyricsIndex[middle].index; low = middle + 1; }
+    else high = middle - 1;
+  }
   if (!forceScroll && next === activeLyricIndex) return;
   const rows = $('lyricsLines').querySelectorAll('.lyrics-line');
   for (const index of [activeLyricIndex - 1, activeLyricIndex, activeLyricIndex + 1]) {
@@ -1216,6 +1231,7 @@ async function loadCurrentLyrics() {
   $('lyricsTrackTitle').textContent = currentTrack.title; $('lyricsTrackArtist').textContent = `${currentTrack.artist} · ${currentTrack.album}`;
   $('lyricsHeading').textContent = currentTrack.title; $('lyricsHeading').title = currentTrack.title; coverStyle(currentTrack, $('lyricsCover'));
   currentLyrics = { raw: '', synced: false, lines: [], source: '', origin: 'unsynced' }; manualLyricsMode = false; renderLyricsOrigin();
+  rebuildTimedLyricsIndex();
   $('cancelLyricsAutoSyncButton').hidden = true;
   manualRedoPending = false;
   updateAutomaticLyricsControls();
@@ -1224,6 +1240,7 @@ async function loadCurrentLyrics() {
   if (lyricsTrackId !== currentTrack.id) return;
   if (saved?.lines?.length) {
     currentLyrics = { raw: String(saved.raw || ''), synced: Boolean(saved.synced), lines: saved.lines, source: 'Salva no Isótopus', origin: saved.origin || (saved.synced ? 'lrc-imported' : 'unsynced') }; renderLyricsOrigin();
+    rebuildTimedLyricsIndex();
     updateAutomaticLyricsControls();
     $('lyricsOffset').value = Math.max(-10, Math.min(10, Number(saved.offset) || 0));
     $('lyricsOffsetValue').textContent = `${Number($('lyricsOffset').value).toFixed(1)} s`;
@@ -1282,7 +1299,7 @@ async function searchLyricsOnline() {
     button.addEventListener('click', () => {
       const text = record.syncedLyrics || record.plainLyrics;
       if (text) applyLyricsText(text, 'LRCLIB');
-      else { currentLyrics = { raw: '', synced: false, lines: [], source: 'LRCLIB' }; showLyricsEmpty('Esta faixa está marcada como instrumental.'); setLyricsStatus('Instrumental'); }
+      else { currentLyrics = { raw: '', synced: false, lines: [], source: 'LRCLIB' }; rebuildTimedLyricsIndex(); showLyricsEmpty('Esta faixa está marcada como instrumental.'); setLyricsStatus('Instrumental'); }
       $('lyricsSearchDialog').close();
     });
     list.append(button);

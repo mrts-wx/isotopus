@@ -6,11 +6,37 @@ const { formatLyrics } = require('../../shared/lyrics');
 function registerLyricsController({ app, ipcMain, shell, dialog, utilityProcess, getWindow, resolveTrackPath }) {
   let requestAt = 0, retryAt = 0, searchQueue = Promise.resolve(), alignmentWorker = null, cancelAlignment = null, alignmentModel = '';
   const searchCache = new Map();
+  let searchCacheBytes = 0;
+  const SEARCH_CACHE_TTL_MS = 30 * 60 * 1000;
+  const SEARCH_CACHE_MAX_BYTES = 8 * 1024 * 1024;
+  const SEARCH_CACHE_MAX_ENTRY_BYTES = 512 * 1024;
   const whisperModels = new Set(['tiny', 'base', 'small']);
   const modelCache = path.join(app.getPath('userData'), 'models', 'transformers');
   const modelCachePath = model => path.join(modelCache, `models--Xenova--whisper-${model}`);
   const validTrackId = id => typeof id === 'string' && /^[a-f0-9]{24}$/.test(id);
   const lyricsStatePath = id => path.join(app.getPath('userData'), 'lyrics', `${id}.json`);
+
+  function removeCachedSearch(key) {
+    const entry = searchCache.get(key);
+    if (!entry) return;
+    searchCacheBytes -= entry.bytes;
+    searchCache.delete(key);
+  }
+
+  function cacheSearchResult(key, value) {
+    const bytes = value.records.reduce((total, record) => total + Buffer.byteLength(record.title) + Buffer.byteLength(record.artist) + Buffer.byteLength(record.album) + Buffer.byteLength(record.plainLyrics) + Buffer.byteLength(record.syncedLyrics) + 64, 0);
+    if (bytes > SEARCH_CACHE_MAX_ENTRY_BYTES) return;
+    removeCachedSearch(key);
+    const now = Date.now();
+    for (const [cachedKey, entry] of searchCache) {
+      if (now - entry.at >= SEARCH_CACHE_TTL_MS) removeCachedSearch(cachedKey);
+    }
+    searchCache.set(key, { at: now, value, bytes });
+    searchCacheBytes += bytes;
+    while (searchCache.size > 200 || searchCacheBytes > SEARCH_CACHE_MAX_BYTES) {
+      removeCachedSearch(searchCache.keys().next().value);
+    }
+  }
 
   async function persistBackgroundLyrics(id, inputLines, result) {
     if (!result?.ok || !validTrackId(id)) return;
@@ -110,7 +136,12 @@ function registerLyricsController({ app, ipcMain, shell, dialog, utilityProcess,
   async function performLyricsSearch(track) {
     if (!track || typeof track.title !== 'string' || typeof track.artist !== 'string') return { ok: false, error: 'Metadados da faixa inválidos.' };
     const cacheKey = [track.title, track.artist, track.album || '', Math.round(Number(track.duration) || 0)].join('|').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
-    const cached = searchCache.get(cacheKey); if (cached && Date.now() - cached.at < 30 * 60 * 1000) return cached.value;
+    const cached = searchCache.get(cacheKey);
+    if (cached && Date.now() - cached.at < SEARCH_CACHE_TTL_MS) {
+      searchCache.delete(cacheKey); searchCache.set(cacheKey, cached);
+      return cached.value;
+    }
+    if (cached) removeCachedSearch(cacheKey);
     const now = Date.now(); if (now < retryAt) return { ok: false, error: 'Aguarde alguns segundos antes de buscar outra letra.' };
     const delay = Math.max(0, 1200 - (now - requestAt)); if (delay) await new Promise(resolve => setTimeout(resolve, delay)); requestAt = Date.now();
     const params = new URLSearchParams({ track_name: track.title.slice(0, 256), artist_name: track.artist.slice(0, 256) });
@@ -123,7 +154,7 @@ function registerLyricsController({ app, ipcMain, shell, dialog, utilityProcess,
       const records = await response.json(); if (!Array.isArray(records)) return { ok: false, error: 'Resposta inesperada do serviço de letras.' };
       const duration = Number(track.duration) || 0; records.sort((a, b) => Math.abs((Number(a.duration) || 0) - duration) - Math.abs((Number(b.duration) || 0) - duration));
       const result = { ok: true, records: records.slice(0, 12).map(record => ({ title: String(record.trackName || record.name || '').slice(0, 256), artist: String(record.artistName || '').slice(0, 256), album: String(record.albumName || '').slice(0, 256), duration: Number(record.duration) || 0, plainLyrics: String(record.plainLyrics || '').slice(0, 100000), syncedLyrics: String(record.syncedLyrics || '').slice(0, 100000), instrumental: Boolean(record.instrumental) })) };
-      searchCache.set(cacheKey, { at: Date.now(), value: result }); if (searchCache.size > 200) searchCache.delete(searchCache.keys().next().value); return result;
+      cacheSearchResult(cacheKey, result); return result;
     } catch (error) { return { ok: false, error: error.name === 'AbortError' ? 'A busca de letras demorou demais.' : 'Não consegui acessar o serviço de letras.' }; }
     finally { clearTimeout(timeout); }
   }
@@ -133,6 +164,14 @@ function registerLyricsController({ app, ipcMain, shell, dialog, utilityProcess,
     const url = new URL('https://www.google.com/search'); url.searchParams.set('q', [track.title, track.artist, 'letra'].filter(value => typeof value === 'string' && value.trim()).join(' ').slice(0, 600));
     try { await shell.openExternal(url.href); return { ok: true }; } catch { return { ok: false, error: 'Não consegui abrir o navegador.' }; }
   });
+
+  return {
+    dispose() {
+      if (cancelAlignment) cancelAlignment();
+      searchCache.clear();
+      searchCacheBytes = 0;
+    }
+  };
 }
 
 module.exports = { registerLyricsController };

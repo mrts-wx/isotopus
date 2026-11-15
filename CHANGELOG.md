@@ -1,3 +1,17 @@
+# Isótopus 0.2.8 — Manutenção de memória e estabilidade
+
+Ajustes internos para manter o uso de memória previsível em sessões longas, sem mudanças na interface ou nos recursos visuais.
+
+- O cache de buscas de letras agora tem limites por resposta e de memória total, além de remover entradas vencidas. Isso evita que pesquisas acumuladas retenham respostas grandes por tempo indeterminado.
+- O cache continua reutilizando resultados recentes; respostas grandes demais simplesmente não ficam armazenadas em memória.
+- A busca da linha ativa na letra usa um índice temporal, evitando percorrer a letra inteira a cada atualização do áudio; os elementos de progresso também são reutilizados durante a reprodução.
+- O servidor local encerra a leitura de áudio ou capa quando o pedido é interrompido, como ao trocar rapidamente de faixa ou posição.
+- Ao encerrar o aplicativo, uma sincronização de letras ainda ativa é cancelada e seu processo auxiliar é finalizado.
+
+Sem mudanças visuais ou novas dependências nesta versão.
+
+---
+
 # Isótopus 0.2.7 — Atualização leve de desempenho
 
 Ajustes internos para reduzir trabalho repetido durante a reprodução e o uso da biblioteca, mantendo os recursos e o visual do Isótopus.

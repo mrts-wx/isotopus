@@ -22,6 +22,7 @@ let settingsSaveTimer;
 let settingsDirty = false;
 let libraryController;
 let downloadController;
+let lyricsController;
 
 function settingsPath() { return path.join(app.getPath('userData'), 'settings.json'); }
 async function loadSettings() {
@@ -172,7 +173,7 @@ if (singleInstanceLock) {
     const port = await serveApp();
     libraryController = createLibraryController({ app, ipcMain, dialog, settings, saveSettings, getWindow: () => win, getServerOrigin: () => `http://127.0.0.1:${serverPort}` });
     registerPlaylistController({ ipcMain, dialog, getWindow: () => win, resolveTrackPath: id => libraryController.resolveTrackPath(id) });
-    registerLyricsController({ app, ipcMain, shell, dialog, utilityProcess, getWindow: () => win, resolveTrackPath: id => libraryController.resolveTrackPath(id) });
+    lyricsController = registerLyricsController({ app, ipcMain, shell, dialog, utilityProcess, getWindow: () => win, resolveTrackPath: id => libraryController.resolveTrackPath(id) });
     downloadController = registerDownloadController({ app, ipcMain, getWindow: () => win, getSettings: () => settings, saveSettings });
     createWindow(port);
     if (pendingSecondInstanceFocus) showWindow();
@@ -188,6 +189,7 @@ if (singleInstanceLock) {
   let quitAfterSettingsSave = false;
   app.on('before-quit', event => {
     isQuitting = true;
+    lyricsController?.dispose();
     if ((settingsDirty || settingsSaveTimer) && !quitAfterSettingsSave) {
       event.preventDefault(); quitAfterSettingsSave = true; clearTimeout(settingsSaveTimer); settingsSaveTimer = null;
       saveSettings().finally(() => app.quit());

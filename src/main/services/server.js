@@ -38,6 +38,17 @@ function createStaticServer(root, resolveAsset = () => null) {
   });
 }
 
+function streamFile(req, res, file, range) {
+  const stream = fs.createReadStream(file, range);
+  const stopOnDisconnect = () => { if (!res.writableFinished) stream.destroy(); };
+  res.once('close', stopOnDisconnect);
+  stream.once('close', () => res.removeListener('close', stopOnDisconnect));
+  stream.once('error', () => {
+    if (!res.destroyed) res.end();
+  });
+  stream.pipe(res);
+}
+
 function serveResource(req, res, resource) {
   const file = resource.path;
   const contentType = resource.contentType || mime[path.extname(file || '').toLowerCase()] || 'application/octet-stream';
@@ -78,11 +89,11 @@ function serveResource(req, res, resource) {
       }
       end = Math.min(end, stat.size - 1);
       res.writeHead(206, { ...baseHeaders, 'Content-Length': end - start + 1, 'Content-Range': `bytes ${start}-${end}/${stat.size}` });
-      if (req.method === 'HEAD') res.end(); else fs.createReadStream(file, { start, end }).pipe(res);
+      if (req.method === 'HEAD') res.end(); else streamFile(req, res, file, { start, end });
       return;
     }
     res.writeHead(200, { ...baseHeaders, 'Content-Length': stat.size });
-    if (req.method === 'HEAD') res.end(); else fs.createReadStream(file).pipe(res);
+    if (req.method === 'HEAD') res.end(); else streamFile(req, res, file);
   });
 }
 
