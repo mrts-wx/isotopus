@@ -1,3 +1,51 @@
+# Isótopus 0.2.6 — Major Update: expansão funcional e refinamento visual
+
+A versão 0.2.6 amplia o controle da reprodução e acrescenta recursos locais de descoberta, organização e acompanhamento da biblioteca. As mudanças preservam a identidade visual atual e reutilizam a mesma sessão de áudio.
+
+## Reprodução e janela compacta
+
+- A fila agora permite arrastar para reordenar, reproduzir uma faixa específica, remover itens individualmente e limpar as próximas faixas sem interromper a música atual.
+- Álbuns, artistas e playlists podem ser acrescentados ao fim da fila. A ordem da biblioteca original continua intacta; o modo aleatório trabalha sobre uma cópia da seleção.
+- O mini player flutuante oferece capa, faixa, artista, play/pause, anterior/próxima, posição e volume. O layout foi espaçado e alinhado; o controle de volume fica oculto até ser aberto acima do ícone. A seta agora alterna o modo compacto e preserva o controle de manter a janela no topo. O player continua sincronizado com a sessão principal, sem criar uma segunda reprodução.
+- Os controles de visualizador, mini player, fila, volume e slider no player inferior compartilham alinhamento e dimensões consistentes.
+
+## Estatísticas e descoberta local
+
+- A nova página de estatísticas registra o tempo de reprodução efetivo e mantém os dados neste computador. Uma reprodução qualificada só é contada após metade de uma faixa curta ou 30 segundos de escuta.
+- Os indicadores incluem horas ouvidas, reproduções qualificadas, faixa, artista, álbum e gênero mais reproduzidos, com filtros de período e gráfico mensal.
+- A página inicial sugere faixas da própria biblioteca com base em artistas, gêneros, histórico recente e músicas ainda não ouvidas. Com pouco histórico, ela informa que está oferecendo faixas para explorar, sem alegar usar uma IA externa.
+- Pastas inteligentes criam coleções dinâmicas por artista, álbum, gênero, ano mínimo e número de reproduções, combinando até duas regras. Elas referenciam as faixas locais e se recalculam quando a biblioteca é atualizada.
+
+## Letras e visualização de áudio
+
+- Cada letra salva exibe sua origem: LRC local, Whisper, marcação manual, LRCLIB, LRC importado ou sem sincronização. O método de origem fica separado do formato `.lrc` exportado.
+- O seletor Whisper oferece Tiny, Base e Small; o app consulta o cache instalado, permite remover o modelo selecionado e cancelar uma análise em andamento. Um modelo escolhido é baixado quando necessário ao iniciar a sincronização. A descrição de recursos é relativa, sem prometer benchmarks de memória ou velocidade.
+- O seletor de modelo Whisper usa agora o menu visual do Isótopus, em vez do controle nativo do sistema.
+- Removido o tooltip nativo ao passar o ponteiro sobre uma linha sincronizada; as linhas continuam clicáveis para buscar o áudio naquele tempo.
+- O visualizador oferece Spectrum Analyzer, waveform, barras de frequência, ondas circulares e modo minimalista, alimentados pelo `AnalyserNode` do grafo de áudio existente. O espectro agora ajusta a faixa de frequências ativas à largura disponível, evitando trechos finais permanentemente retos quando as bandas altas estão silenciosas. A animação só roda enquanto a janela do visualizador está aberta e a música está tocando.
+
+## Aparência e transparência
+
+- O popup de aparência mantém as paletas claro/escuro/automática e os estilos Padrão, Mica e Vidro. Mica e Vidro afetam somente docks, busca, botões, menus e janelas sobrepostas; capas e cards da biblioteca preservam o próprio visual. Mica deixa transparecer o conteúdo ao fundo com blur leve; Vidro aumenta transparência e blur sem sacrificar a leitura.
+- A ambientação opcional extrai um tom mais evidente da capa e o aplica apenas ao player inferior, miniplayer e realces da tela de letras. O laranja da marca e o restante da interface não mudam de cor. As preferências ficam salvas localmente.
+- A dock inferior agora sobrepõe a área rolável, permitindo que capas e conteúdo passem visualmente atrás dela nos estilos Mica e Vidro. O plano de fundo acrílico é contínuo sob a lateral e a biblioteca, mantendo os cards de álbum delimitados e sem aplicar blur às capas.
+- Mica e Vidro usam a capa atual como plano de fundo desfocado em toda a janela, mantendo as capas dos cards nítidas e delimitadas. Os estilos têm transparência e desfoque distintos; no tema claro, os textos escurecem para manter o contraste.
+- Corrigida a aplicação acidental da superfície escura da lateral no tema claro com estilo Normal; nesse estilo, a lateral volta a usar o painel opaco da paleta escolhida.
+- As cores dinâmicas destacam docks, controles e cards de música com um contorno neon pulsante aplicado por dentro das bordas. O brilho fica contido, sem halo vazando para fora; há mais espaço entre a lateral e a dock inferior.
+- A tipografia da interface foi padronizada com Inter e alternativas nativas equivalentes; botões mantêm pesos mais firmes e o comando de download recebeu tamanho e hierarquia visual próprios.
+- Os menus de período das estatísticas e de estilo do visualizador agora usam o seletor visual do Isótopus, sem abrir listas nativas do sistema.
+- A página **Sobre o Isótopus** apresenta versão, manifesto, tecnologias, repositório, créditos de omartinss e assistência de desenvolvimento do Codex (OpenAI), com aviso de que o projeto é independente.
+- O código original do projeto passa a usar a licença MIT, incluída no arquivo `LICENSE`; componentes de terceiros mantêm suas próprias licenças.
+
+## Estabilidade e escopo
+
+- Nenhuma dependência de runtime foi adicionada. O visualizador reaproveita o equalizador e o mini player envia comandos à sessão principal, evitando criar um segundo deck de áudio.
+- O carregamento de faixas monta 24 cards por lote para reduzir imagens decodificadas e elementos mantidos na tela. Os buffers do visualizador são reutilizados em vez de recriados em cada quadro, e a janela compacta reduz animações em segundo plano.
+- As estatísticas e coleções ficam no armazenamento local do aplicativo; nenhuma dessas novas funções envia histórico para servidores externos.
+- O editor de metadados diretamente nos arquivos de áudio não entrou nesta versão. A biblioteca atual reconhece múltiplos contêineres, mas não possui um gravador multiplataforma seguro para todos eles; esta versão não altera tags dos arquivos.
+
+---
+
 # Isótopus 0.2.5 — Aparência adaptável e ações rápidas
 
 ## Tema e aparência

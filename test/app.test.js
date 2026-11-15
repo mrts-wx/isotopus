@@ -12,7 +12,7 @@ const { parseLyrics, formatLyrics, rankLyricsRecords, alignLyricsToTranscript } 
 const { repairFlacPictureMime } = require('../src/main/services/flac');
 
 const root = path.resolve(__dirname, '..');
-const sourcePaths = { 'main.js': 'src/main/main.js', 'preload.js': 'src/main/preload.js', 'app.js': 'src/renderer/app.js', 'index.html': 'src/renderer/index.html', 'styles.css': 'src/renderer/styles/styles.css', 'theme.css': 'src/renderer/styles/theme.css', 'motion.css': 'src/renderer/styles/motion.css', 'local.css': 'src/renderer/styles/local.css', 'polish.css': 'src/renderer/styles/polish.css', 'clarity.css': 'src/renderer/styles/clarity.css', 'lyrics.css': 'src/renderer/styles/lyrics.css', 'features.css': 'src/renderer/styles/features.css', 'home-player.css': 'src/renderer/styles/home-player.css', 'refresh-022.css': 'src/renderer/styles/refresh-022.css', 'lyrics.js': 'src/shared/lyrics.js', 'shuffle.js': 'src/shared/shuffle.js', 'lyrics-worker.cjs': 'src/main/workers/lyrics-worker.cjs', 'no-cover.svg': 'src/assets/no-cover.svg', 'Discord-description.txt': 'docs/Discord-description.txt', 'equalizer-controller.js': 'src/renderer/controllers/equalizer-controller.js', 'lyrics-controller.js': 'src/main/controllers/lyrics-controller.js' };
+const sourcePaths = { 'main.js': 'src/main/main.js', 'preload.js': 'src/main/preload.js', 'app.js': 'src/renderer/app.js', 'index.html': 'src/renderer/index.html', 'styles.css': 'src/renderer/styles/styles.css', 'theme.css': 'src/renderer/styles/theme.css', 'motion.css': 'src/renderer/styles/motion.css', 'local.css': 'src/renderer/styles/local.css', 'polish.css': 'src/renderer/styles/polish.css', 'clarity.css': 'src/renderer/styles/clarity.css', 'lyrics.css': 'src/renderer/styles/lyrics.css', 'features.css': 'src/renderer/styles/features.css', 'home-player.css': 'src/renderer/styles/home-player.css', 'refresh-022.css': 'src/renderer/styles/refresh-022.css', 'refresh-026.css': 'src/renderer/styles/refresh-026.css', 'mini-player.css': 'src/renderer/styles/mini-player.css', 'mini-player.js': 'src/renderer/mini-player.js', 'mini-player.html': 'src/renderer/mini-player.html', 'lyrics.js': 'src/shared/lyrics.js', 'shuffle.js': 'src/shared/shuffle.js', 'lyrics-worker.cjs': 'src/main/workers/lyrics-worker.cjs', 'no-cover.svg': 'src/assets/no-cover.svg', 'Discord-description.txt': 'docs/Discord-description.txt', 'equalizer-controller.js': 'src/renderer/controllers/equalizer-controller.js', 'lyrics-controller.js': 'src/main/controllers/lyrics-controller.js' };
 const read = name => fsSync.readFileSync(path.join(root, sourcePaths[name] || name), 'utf8');
 
 function makeWav() {
@@ -243,7 +243,7 @@ test('floating docks keep their dimensions and center the player controls', () =
 
 test('large libraries render in batches and player supports desktop controls', () => {
   const app = read('app.js');
-  assert.match(app, /const PAGE_SIZE = 48/);
+  assert.match(app, /const PAGE_SIZE = 24/);
   assert.match(app, /Mostrar mais ·/);
   assert.match(app, /navigator\.mediaSession\.setActionHandler/);
   assert.match(app, /event\.code === 'Space'/);
@@ -394,7 +394,7 @@ test('desktop identity, app clarity, and launcher icon are configured', () => {
   const pkg = JSON.parse(read('package.json'));
   const app = read('app.js');
   assert.equal(pkg.name, 'isotopus');
-  assert.equal(pkg.version, '0.2.5');
+  assert.equal(pkg.version, '0.2.6');
   assert.equal(pkg.dependencies['@huggingface/transformers'], '^3.8.1');
   assert.equal(pkg.scripts['build:debian'], 'node scripts/patch-transformers-electron.js && electron-builder --linux deb');
   assert.equal(pkg.scripts['build:arch'], 'node scripts/patch-transformers-electron.js && electron-builder --linux pacman');
@@ -409,4 +409,69 @@ test('desktop identity, app clarity, and launcher icon are configured', () => {
   assert.match(app, /lyrics-open/);
   assert.doesNotMatch(app, /syncPresence|lastPresenceSignature/);
   assert.match(read('Discord-description.txt'), /player local de música para Ubuntu/i);
+});
+
+test('v0.2.6 adds local stats, smart collections, live visualization, and a shared mini player', () => {
+  const app = read('app.js'); const html = read('index.html'); const main = read('main.js'); const preload = read('preload.js');
+  assert.match(app, /function recordListeningProgress/);
+  assert.match(app, /function renderStatisticsPage/);
+  assert.match(app, /function renderSmartFolders/);
+  assert.match(app, /function renderRecommendations/);
+  assert.match(app, /row\.draggable = true/);
+  assert.match(app, /function publishMiniPlayerState/);
+  assert.match(html, /id="visualizerDialog"/);
+  assert.match(html, /id="miniPlayerButton"/);
+  assert.match(preload, /openMiniPlayer/);
+  assert.match(main, /win\.webContents\.send\('mini-player:command'/);
+  assert.match(read('equalizer-controller.js'), /createAnalyser\(\)/);
+  assert.match(app, /analyser\.getByteFrequencyData/);
+  assert.match(app, /currentLyrics\.origin = 'whisper'/);
+  assert.match(app, /refreshCoverAmbient/);
+  assert.match(app, /document\.body\.dataset\.surfaceStyle = surfaceStyle/);
+  assert.doesNotMatch(app, /for \(const key of \['surfaceStyle', 'screenBackground', 'dockBackground'\]\) store\.set/);
+  assert.match(read('mini-player.js'), /sendMiniPlayerCommand/);
+  assert.doesNotMatch(read('mini-player.js'), /new Audio\(/);
+  const miniHtml = read('src/renderer/mini-player.html'); const miniCss = read('src/renderer/styles/mini-player.css'); const miniJs = read('src/renderer/mini-player.js');
+  assert.match(miniHtml, /id="miniVolumeToggle"[^>]+aria-expanded="false"/);
+  assert.match(miniHtml, /id="miniSize"/);
+  assert.match(miniJs, /setMiniPlayerCompact\(compact\)/);
+  assert.match(miniJs, /setMiniPlayerAlwaysOnTop\(enabled\)/);
+  assert.match(miniCss, /bottom:40px/);
+  assert.match(main, /mini-player:compact/);
+  assert.equal(JSON.parse(read('package.json')).license, 'MIT');
+  assert.ok(fsSync.existsSync(path.join(root, 'LICENSE')));
+  assert.match(html, /class="styled-select whisper-model-select" id="whisperModelSelect"/);
+  assert.doesNotMatch(html, /<select id="whisperModelSelect"/);
+  assert.match(read('src/renderer/styles/refresh-026.css'), /\.queue-toolbar/);
+  assert.match(read('src/renderer/styles/refresh-026.css'), /\.lyrics-screen/);
+  assert.match(read('src/renderer/styles/refresh-026.css'), /\.result-art,\.result-card,\.album-card\{backdrop-filter:none/);
+  assert.match(app, /function createStyledSelect\(/);
+  assert.match(app, /const PAGE_SIZE = 24/);
+  assert.match(app, /let visualizerFrequency = null, visualizerWaveform = null/);
+  assert.match(html, /class="styled-select visualizer-style-select" id="visualizerStyle"/);
+  assert.doesNotMatch(html, /<select id="visualizerStyle"/);
+  assert.match(app, /createStyledSelect\('statsPeriod'/);
+  assert.doesNotMatch(app, /document\.createElement\('select'\); select\.id = 'statsPeriod'/);
+  assert.match(read('main.js'), /updateMainBackgroundThrottling/);
+  assert.match(read('main.js'), /backgroundThrottling: true/);
+  const refresh = read('src/renderer/styles/refresh-026.css');
+  assert.match(refresh, /data-surface-style="mica"\] \.player-bar\{background-color:rgba\(28,32,34,\.48\)/);
+  assert.match(refresh, /data-surface-style="glass"\] \.player-bar\{background-color:rgba\(28,32,34,\.22\)/);
+  assert.match(refresh, /dynamic-colors\[data-surface-style="glass"\] \.player-bar\{background-image:linear-gradient/);
+  assert.match(refresh, /body>\.player-bar\{position:fixed!important/);
+  assert.match(refresh, /main-area>\.content\{padding-bottom:148px!important/);
+  assert.match(refresh, /@keyframes cover-neon-dock/);
+  assert.match(read('src/renderer/styles/mini-player.css'), /body\.dynamic \.mini-shell\{border-color/);
+  assert.match(app, /publishMiniPlayerState\(\);\s*\}\s*catch/);
+});
+
+test('v0.2.6 keeps acrylic and full-window artwork out of Normal mode', () => {
+  const refresh = read('src/renderer/styles/refresh-026.css');
+  assert.match(refresh, /body:not\(\.dark-theme\)\[data-surface-style="normal"\]>.app-shell>.sidebar\{background:var\(--fresh-surface\)!important/);
+  assert.match(refresh, /body\.dark-theme\[data-surface-style="normal"\]>.app-shell>.sidebar\{background:var\(--fresh-surface\)!important/);
+  assert.match(refresh, /body:is\(\[data-surface-style="mica"\],\[data-surface-style="glass"\]\)>.app-shell::before/);
+  assert.match(refresh, /body\.dynamic-colors :is\(\.result-card,\.quick-card/);
+  assert.match(refresh, /cover-neon-card-inset/);
+  assert.match(refresh, /--font-ui:Inter,"Segoe UI",Ubuntu,system-ui,-apple-system,sans-serif/);
+  assert.match(refresh, /\.download-url-bar #downloadStartButton\{min-width:136px;font-size:13px;font-weight:650/);
 });

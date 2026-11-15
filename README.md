@@ -8,6 +8,12 @@ Player de música local para Linux e Windows, feito para organizar e ouvir uma c
 - Biblioteca monitorada, playlists que podem ser renomeadas, reordenadas e excluídas, busca, favoritos e fila de reprodução; ações rápidas por faixa para playlist, favorito, próxima música e exclusão confirmada do arquivo.
 - Letras LRC e sincronização manual por faixa.
 - Busca automática de letras no LRCLIB e sincronização estimada de letras sem tempos com o áudio local.
+- Indicador da origem das letras; seletor local de modelo Whisper (Tiny/Base/Small), consulta e remoção do cache e cancelamento de análises.
+- Mini player flutuante que controla a mesma reprodução da janela principal, com capa, transporte, volume e progresso.
+- Fila reordenável e gerenciável; álbuns e playlists podem ser adicionados sem interromper a música atual.
+- Estatísticas locais de reprodução, recomendações baseadas na biblioteca e pastas inteligentes por metadados ou reproduções.
+- Visualizador de áudio com cinco modos alimentados pelos dados do áudio real; o processamento visual para quando a janela fecha ou a música pausa.
+- Página Sobre e opções de aparência Padrão, Mica e Glass. As cores extraídas da capa são opcionais e complementares.
 - Temas claro, escuro e automático com fundos consistentes na tela, lateral, topo e miniplayer; escala de 100% a 175%.
 - Marcador do player animado durante a reprodução, com suporte à preferência por movimento reduzido.
 - Abertura corrigida para carregar pastas monitoradas e ativar todos os controles; cache de capas recupera imagens ausentes.
@@ -15,6 +21,8 @@ Player de música local para Linux e Windows, feito para organizar e ouvir uma c
 - Downloads opcionais via yt-dlp oficial: faixas ou playlists com progresso individual no gerenciador de downloads, retentativas e pausas entre itens, metadados e capa no MP3; exige consentimento e FFmpeg. Playlists processam até 100 itens, e Spotify não fornece áudio para este fluxo.
 - Aviso de novas versões com link para o instalador apropriado de Ubuntu/Debian, Arch ou Windows.
 - Pacotes de distribuição para Debian/Ubuntu, Arch e Windows.
+
+O editor de metadados diretamente nos arquivos não está incluído na 0.2.6: o projeto ainda não tem uma solução segura de escrita multiplataforma para todos os formatos que lê.
 
 O app identifica o codec armazenado, mas não consegue verificar se um arquivo lossless veio de uma fonte sem perdas. A saída de áudio também pode ser mixada ou reamostrada pelo sistema operacional.
 
@@ -48,7 +56,7 @@ Os arquivos gerados ficam em `dist/`. O código do app fica em `src/`, organizad
 
 ## Builds publicadas
 
-Os instaladores históricos e atuais estão organizados em `release-assets/`, por versão (`v0.1.0` a `v0.2.5`). Eles são mantidos fora dos commits e enviados como anexos de Releases do GitHub, inclusive porque alguns arquivos ultrapassam o limite de tamanho de arquivos comuns do Git.
+Os instaladores históricos e atuais estão organizados em `release-assets/`, por versão (`v0.1.0` a `v0.2.6`). Eles são mantidos fora dos commits e enviados como anexos de Releases do GitHub, inclusive porque alguns arquivos ultrapassam o limite de tamanho de arquivos comuns do Git.
 
 
 ## Instalar uma build
@@ -59,7 +67,7 @@ Baixe o instalador da versão desejada na página **Releases** do repositório e
 - **Debian ou Ubuntu:** baixe `Isotopus-<versão>-amd64.deb`, abra um terminal na pasta do download e rode `sudo apt install ./Isotopus-<versão>-amd64.deb`. O `apt` instala o pacote e tenta resolver as dependências.
 - **Arch Linux:** baixe `Isotopus-<versão>-x64.pacman` e rode `sudo pacman -U ./Isotopus-<versão>-x64.pacman` no terminal, dentro da pasta do download.
 
-Substitua `<versão>` pelo número publicado, como `0.2.5`. Nem toda versão tem instalador para todos os sistemas; use um arquivo que esteja anexado à Release daquela versão. O [CHANGELOG](CHANGELOG.md) resume as mudanças da versão mais recente; cada Release também apresenta as notas daquela versão.
+Substitua `<versão>` pelo número publicado, como `0.2.6`. Nem toda versão tem instalador para todos os sistemas; use um arquivo que esteja anexado à Release daquela versão. O [CHANGELOG](CHANGELOG.md) resume as mudanças da versão mais recente; cada Release também apresenta as notas daquela versão.
 
 ### Sobre avisos de segurança
 
@@ -73,8 +81,8 @@ O player mantém a biblioteca e a reprodução no computador. Quando você solic
 
 Ao abrir a tela de letras, o Isótopus tenta encontrar uma letra correspondente no LRCLIB, priorizando a gravação com título, artista e duração mais próximos. Se encontrar uma letra já sincronizada, ela aparece automaticamente. Se encontrar somente texto sem tempos — ou se você abrir uma letra local — use **Sincronizar com áudio** para criar uma estimativa de tempos.
 
-Na primeira sincronização, o app baixa o modelo Whisper small quantizado e guarda os arquivos no perfil local. O áudio e o texto são analisados no próprio computador e não são enviados para um serviço de reconhecimento. O processamento pode levar alguns minutos e os tempos podem precisar de correção, especialmente em gravações com vocais sobrepostos, palavras pouco inteligíveis ou diferenças entre a letra publicada e a gravação. A sincronização automática aceita faixas de até 10 minutos e arquivos de até 160 MB. A marcação manual continua disponível; o resultado estimado fica salvo nas preferências locais do Isótopus e pode ser exportado como `.lrc` junto da música.
+Na primeira sincronização, o app baixa o modelo selecionado (Tiny, Base ou Small) e guarda os arquivos no perfil local. O áudio e o texto são analisados no próprio computador e não são enviados para um serviço de reconhecimento. O processamento pode levar alguns minutos e os tempos podem precisar de correção, especialmente em gravações com vocais sobrepostos, palavras pouco inteligíveis ou diferenças entre a letra publicada e a gravação. A sincronização automática aceita faixas de até 10 minutos e arquivos de até 160 MB. A marcação manual continua disponível; o resultado estimado fica salvo nas preferências locais do Isótopus e pode ser exportado como `.lrc` junto da música.
 
 ## Licença
 
-O pacote declara `UNLICENSED`. Nenhuma licença de código aberto foi adicionada; consulte o autor antes de reutilizar ou redistribuir o código fora das builds publicadas.
+O código original do Isótopus é distribuído sob a licença MIT; consulte o arquivo [LICENSE](LICENSE). Dependências e componentes de terceiros continuam sujeitos às respectivas licenças. Créditos do projeto: omartinss. O desenvolvimento recebeu assistência do Codex (OpenAI); o Isótopus é um projeto independente, sem afiliação ou endosso da OpenAI.

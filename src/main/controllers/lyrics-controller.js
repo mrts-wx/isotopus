@@ -4,8 +4,11 @@ const path = require('node:path');
 const { formatLyrics } = require('../../shared/lyrics');
 
 function registerLyricsController({ app, ipcMain, shell, dialog, utilityProcess, getWindow, resolveTrackPath }) {
-  let requestAt = 0, retryAt = 0, searchQueue = Promise.resolve(), alignmentWorker = null;
+  let requestAt = 0, retryAt = 0, searchQueue = Promise.resolve(), alignmentWorker = null, cancelAlignment = null, alignmentModel = '';
   const searchCache = new Map();
+  const whisperModels = new Set(['tiny', 'base', 'small']);
+  const modelCache = path.join(app.getPath('userData'), 'models', 'transformers');
+  const modelCachePath = model => path.join(modelCache, `models--Xenova--whisper-${model}`);
   const validTrackId = id => typeof id === 'string' && /^[a-f0-9]{24}$/.test(id);
   const lyricsStatePath = id => path.join(app.getPath('userData'), 'lyrics', `${id}.json`);
 
@@ -15,7 +18,7 @@ function registerLyricsController({ app, ipcMain, shell, dialog, utilityProcess,
       const file = lyricsStatePath(id), state = JSON.parse(await fs.readFile(file, 'utf8'));
       if (state.synced || !Array.isArray(state.lines) || state.lines.length !== inputLines.length || !state.lines.every((line, index) => line?.text === inputLines[index])) return;
       const lines = result.lines.map(line => ({ text: line.text, time: line.time }));
-      const updated = JSON.stringify({ raw: formatLyrics(lines), synced: true, lines, offset: Math.max(-10, Math.min(10, Number(state.offset) || 0)) });
+      const updated = JSON.stringify({ raw: formatLyrics(lines), synced: true, lines, offset: Math.max(-10, Math.min(10, Number(state.offset) || 0)), origin: 'whisper' });
       await fs.writeFile(`${file}.tmp`, updated, { mode: 0o600 }); await fs.rename(`${file}.tmp`, file);
     } catch (error) { console.error('Could not persist background lyric alignment:', error); }
   }
@@ -31,13 +34,35 @@ function registerLyricsController({ app, ipcMain, shell, dialog, utilityProcess,
       if (!line || typeof line.text !== 'string' || line.text.length > 10000 || !(line.time == null || (Number.isFinite(line.time) && line.time >= 0 && line.time <= 86400))) return { ok: false };
       lines.push({ text: line.text, time: line.time == null ? null : line.time });
     }
-    const data = JSON.stringify({ raw: state.raw, synced: Boolean(state.synced), lines, offset: Math.max(-10, Math.min(10, Number(state.offset) || 0)) });
+    const allowedOrigins = new Set(['local-lrc', 'whisper', 'manual', 'lrclib', 'lrc-imported', 'unsynced']);
+    const origin = allowedOrigins.has(state.origin) ? state.origin : (state.synced ? 'lrc-imported' : 'unsynced');
+    const data = JSON.stringify({ raw: state.raw, synced: Boolean(state.synced), lines, offset: Math.max(-10, Math.min(10, Number(state.offset) || 0)), origin });
     if (Buffer.byteLength(data, 'utf8') > 1024 * 1024) return { ok: false, error: 'A letra passa de 1 MB.' };
     const file = lyricsStatePath(id); await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(`${file}.tmp`, data, { mode: 0o600 }); await fs.rename(`${file}.tmp`, file); return { ok: true };
   });
+  ipcMain.handle('lyrics:models:list', async event => {
+    if (event.sender !== getWindow()?.webContents) return [];
+    const result = [];
+    for (const model of whisperModels) {
+      let installed = false; try { await fs.access(modelCachePath(model)); installed = true; } catch {}
+      result.push({ model, installed });
+    }
+    return result;
+  });
+  ipcMain.handle('lyrics:models:delete', async (event, model) => {
+    if (event.sender !== getWindow()?.webContents || !whisperModels.has(model)) return { ok: false, error: 'Modelo inválido.' };
+    if (alignmentModel === model) return { ok: false, error: 'Este modelo está sendo usado pela sincronização ativa.' };
+    try { await fs.rm(modelCachePath(model), { recursive: true, force: true }); return { ok: true }; }
+    catch { return { ok: false, error: 'Não consegui remover os arquivos locais deste modelo.' }; }
+  });
+  ipcMain.handle('lyrics:align:cancel', event => {
+    if (event.sender !== getWindow()?.webContents || !cancelAlignment) return false;
+    cancelAlignment(); return true;
+  });
   ipcMain.handle('lyrics:align', async (event, payload) => {
     const id = payload?.id, audioPath = resolveTrackPath(id), samples = payload?.samples, lyrics = payload?.lines, duration = Number(payload?.duration) || 0;
+    const model = whisperModels.has(payload?.model) ? payload.model : 'small';
     if (!validTrackId(id) || !audioPath || !fsSync.existsSync(audioPath)) return { ok: false, error: 'A faixa não está mais disponível na biblioteca.' };
     if (!(samples instanceof Float32Array) || samples.length < 16000 * 8 || samples.length > 16000 * 600) return { ok: false, error: 'O áudio precisa ter entre 8 segundos e 10 minutos para a sincronização automática.' };
     if (!Array.isArray(lyrics) || lyrics.length < 2 || lyrics.length > 1200 || lyrics.some(line => typeof line !== 'string' || line.length > 1000)) return { ok: false, error: 'A letra não é válida para sincronização.' };
@@ -47,7 +72,9 @@ function registerLyricsController({ app, ipcMain, shell, dialog, utilityProcess,
       const workerPath = app.isPackaged ? path.join(process.resourcesPath, 'lyrics-worker.cjs') : path.join(__dirname, '../workers/lyrics-worker.cjs');
       const worker = utilityProcess.fork(workerPath, [], { serviceName: 'Isótopus Lyrics Synchronizer', env: { ...process.env, ISOTOPUS_APP_PATH: app.getAppPath() } });
       alignmentWorker = worker;
-      const finish = result => { if (settled) return; settled = true; if (alignmentWorker === worker) alignmentWorker = null; resolve(result); };
+      const finish = result => { if (settled) return; settled = true; if (alignmentWorker === worker) alignmentWorker = null; cancelAlignment = null; alignmentModel = ''; resolve(result); };
+      alignmentModel = model;
+      cancelAlignment = () => { finish({ ok: false, cancelled: true, error: 'Análise cancelada.' }); worker.kill(); };
       worker.on('message', async message => {
         if (!message || message.id !== id) return;
         if (message.type === 'progress') { if (!event.sender.isDestroyed()) event.sender.send('lyrics:align-progress', { id, phase: message.phase, message: message.message }); }
@@ -55,7 +82,7 @@ function registerLyricsController({ app, ipcMain, shell, dialog, utilityProcess,
       });
       worker.on('error', error => { console.error('Lyrics worker failed:', error); finish({ ok: false, error: 'O processo de sincronização em segundo plano falhou. O Isótopus continua aberto; você pode tentar novamente.' }); });
       worker.on('exit', code => { if (alignmentWorker === worker) alignmentWorker = null; if (!settled) finish({ ok: false, error: `O processo de sincronização em segundo plano foi encerrado (${code ?? 'sem código'}). O Isótopus continua aberto; tente uma faixa menor ou feche outros aplicativos e tente novamente.` }); });
-      try { worker.postMessage({ id, samples, lines: lyrics, duration, cacheDir: path.join(app.getPath('userData'), 'models', 'transformers') }); }
+      try { worker.postMessage({ id, samples, lines: lyrics, duration, model, cacheDir: modelCache }); }
       catch (error) { console.error('Could not start lyrics worker:', error); finish({ ok: false, error: 'Não consegui iniciar a sincronização em segundo plano.' }); worker.kill(); }
     });
   });

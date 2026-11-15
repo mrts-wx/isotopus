@@ -27,7 +27,10 @@ contextBridge.exposeInMainWorld('isotopus', {
   searchLyricsWeb: track => ipcRenderer.invoke('lyrics:webSearch', track),
   getLyricsState: id => ipcRenderer.invoke('lyrics:state:get', id),
   saveLyricsState: (id, state) => ipcRenderer.invoke('lyrics:state:set', { id, state }),
-  alignLyrics: (id, samples, lines, duration) => ipcRenderer.invoke('lyrics:align', { id, samples, lines, duration }),
+  alignLyrics: (id, samples, lines, duration, model) => ipcRenderer.invoke('lyrics:align', { id, samples, lines, duration, model }),
+  cancelLyricsAlignment: () => ipcRenderer.invoke('lyrics:align:cancel'),
+  listWhisperModels: () => ipcRenderer.invoke('lyrics:models:list'),
+  deleteWhisperModel: model => ipcRenderer.invoke('lyrics:models:delete', model),
   onLyricsAlignProgress: callback => {
     const listener = (_event, data) => callback(data);
     ipcRenderer.on('lyrics:align-progress', listener);
@@ -35,6 +38,16 @@ contextBridge.exposeInMainWorld('isotopus', {
   },
   getPersistentStore: () => ipcRenderer.sendSync('store:get'),
   setPersistentStore: (key, value) => ipcRenderer.send('store:set', { key, value }),
+  openMiniPlayer: () => ipcRenderer.invoke('mini-player:open'),
+  publishMiniPlayerState: state => ipcRenderer.send('mini-player:state', state),
+  onMiniPlayerCommand: callback => { const listener = (_event, data) => callback(data); ipcRenderer.on('mini-player:command', listener); return () => ipcRenderer.removeListener('mini-player:command', listener); },
+  onMiniPlayerRequestState: callback => { const listener = () => callback(); ipcRenderer.on('mini-player:request-state', listener); return () => ipcRenderer.removeListener('mini-player:request-state', listener); },
+  onMiniPlayerState: callback => { const listener = (_event, data) => callback(data); ipcRenderer.on('mini-player:state', listener); return () => ipcRenderer.removeListener('mini-player:state', listener); },
+  requestMiniPlayerState: () => ipcRenderer.send('mini-player:request-state'),
+  setMiniPlayerCompact: compact => ipcRenderer.send('mini-player:compact', Boolean(compact)),
+  sendMiniPlayerCommand: command => ipcRenderer.send('mini-player:command', command),
+  setMiniPlayerAlwaysOnTop: enabled => ipcRenderer.send('mini-player:always-on-top', Boolean(enabled)),
+  closeMiniPlayer: () => ipcRenderer.send('mini-player:close'),
   onTrayUnavailable: callback => ipcRenderer.on('tray:unavailable', callback),
   onLibraryUpdated: callback => {
     const listener = (_event, data) => callback(data);

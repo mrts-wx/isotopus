@@ -12,6 +12,7 @@ function report(id, phase, message) {
 parentPort?.on('message', async event => {
   const payload = event.data;
   const { id, samples, lines, duration, cacheDir } = payload || {};
+  const modelName = ['tiny', 'base', 'small'].includes(payload?.model) ? payload.model : 'small';
   let failureStage = 'model';
   try {
     if (!(samples instanceof Float32Array) || !Array.isArray(lines)) throw new Error('Dados de áudio ou letra inválidos.');
@@ -24,7 +25,7 @@ parentPort?.on('message', async event => {
     env.cacheDir = cacheDir;
 
     const lastProgress = new Map();
-    const transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-small', {
+    const transcriber = await pipeline('automatic-speech-recognition', `Xenova/whisper-${modelName}`, {
       dtype: 'q8',
       device: 'cpu',
       session_options: {

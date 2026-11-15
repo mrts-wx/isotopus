@@ -30,8 +30,9 @@
           return filter;
         });
         source.connect(filters[0]); filters.slice(1).forEach((filter, index) => filters[index].connect(filter));
-        filters.at(-1).connect(audioContext.destination);
-        const graph = { source, filters }; graphs.set(deck, graph); applyGraph(graph); return graph;
+        const analyser = audioContext.createAnalyser(); analyser.fftSize = 1024; analyser.smoothingTimeConstant = .78;
+        filters.at(-1).connect(analyser); analyser.connect(audioContext.destination);
+        const graph = { source, filters, analyser }; graphs.set(deck, graph); applyGraph(graph); return graph;
       } catch { return null; }
     }
     async function play(deck) { setup(deck); if (audioContext?.state === 'suspended') await audioContext.resume().catch(() => {}); await deck.play(); }
@@ -60,7 +61,7 @@
       if (!PRESETS[preset]) return;
       state.preset = preset; state.values = [...PRESETS[preset]]; render(); apply(); save(); summary();
     }
-    return { get state() { return state; }, play, apply, save, render, summary, setEnabled, setPreset, setStyledSelect };
+    return { get state() { return state; }, play, apply, save, render, summary, setEnabled, setPreset, setStyledSelect, analyser: deck => graphs.get(deck)?.analyser || null };
   }
   root.IsotopusEqualizer = { create };
 })(window);

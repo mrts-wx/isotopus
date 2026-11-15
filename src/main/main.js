@@ -13,6 +13,7 @@ let pendingSecondInstanceFocus = false;
 let server;
 let serverPort;
 let win;
+let miniPlayerWindow;
 let tray;
 let isQuitting = false;
 let settings = { folders: [], store: {} };
@@ -46,6 +47,12 @@ function scheduleSettingsSave() {
   settingsSaveTimer.unref?.();
 }
 function showWindow() { if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); win.moveTop(); } }
+function updateMainBackgroundThrottling() {
+  if (!win || win.isDestroyed()) return;
+  // Keep crossfade timing exact while hidden only when the user enabled it.
+  const crossfadeNeedsTimers = Number(settings.store?.crossfade) > 0;
+  win.webContents.setBackgroundThrottling(!win.isVisible() && !crossfadeNeedsTimers);
+}
 function syncTray() {
   const enabled = settings.store?.minimizeToTray === 'yes';
   if (enabled && !tray) {
@@ -90,6 +97,10 @@ function createWindow(port) {
   });
   win.loadURL(`http://127.0.0.1:${port}/renderer/index.html`);
   win.setMenuBarVisibility(false);
+  win.on('hide', updateMainBackgroundThrottling);
+  win.on('show', updateMainBackgroundThrottling);
+  win.on('minimize', updateMainBackgroundThrottling);
+  win.on('restore', updateMainBackgroundThrottling);
   win.on('close', event => {
     if (!isQuitting && tray && settings.store?.minimizeToTray === 'yes') { event.preventDefault(); win.hide(); }
   });
@@ -100,6 +111,38 @@ function createWindow(port) {
     return { action: 'deny' };
   });
 }
+function openMiniPlayerWindow() {
+  if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) { miniPlayerWindow.show(); miniPlayerWindow.focus(); return; }
+  miniPlayerWindow = new BrowserWindow({ width: 430, height: 148, minWidth: 380, minHeight: 90, maxWidth: 560, maxHeight: 210, frame: false, transparent: true, resizable: true, alwaysOnTop: false, show: false, backgroundColor: '#00000000', webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: true } });
+  miniPlayerWindow.loadURL(`http://127.0.0.1:${serverPort}/renderer/mini-player.html`);
+  miniPlayerWindow.once('ready-to-show', () => { miniPlayerWindow?.show(); win?.webContents.send('mini-player:request-state'); });
+  miniPlayerWindow.on('closed', () => { miniPlayerWindow = null; });
+  miniPlayerWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+}
+ipcMain.handle('mini-player:open', event => { if (event.sender !== win?.webContents) return false; openMiniPlayerWindow(); return true; });
+ipcMain.on('mini-player:state', (event, state) => {
+  if (event.sender !== win?.webContents || !miniPlayerWindow || miniPlayerWindow.isDestroyed()) return;
+  miniPlayerWindow.webContents.send('mini-player:state', state);
+});
+ipcMain.on('mini-player:request-state', event => { if (event.sender === miniPlayerWindow?.webContents) win?.webContents.send('mini-player:request-state'); });
+ipcMain.on('mini-player:compact', (event, compact) => {
+  if (event.sender !== miniPlayerWindow?.webContents || !miniPlayerWindow || miniPlayerWindow.isDestroyed() || typeof compact !== 'boolean') return;
+  const [width] = miniPlayerWindow.getSize();
+  miniPlayerWindow.setSize(width, compact ? 90 : 148, true);
+});
+ipcMain.on('mini-player:command', (event, command) => {
+  if (event.sender !== miniPlayerWindow?.webContents || win?.isDestroyed()) return;
+  const allowed = new Set(['playPause', 'next', 'previous', 'seek', 'volume']);
+  if (!command || !allowed.has(command.type)) return;
+  if (command.type === 'volume' && (!Number.isFinite(command.value) || command.value < 0 || command.value > 100)) return;
+  if (command.type === 'seek' && (!Number.isFinite(command.value) || command.value < 0 || command.value > 86400)) return;
+  win.webContents.send('mini-player:command', command);
+});
+ipcMain.on('mini-player:always-on-top', (event, enabled) => {
+  if (event.sender !== miniPlayerWindow?.webContents || !miniPlayerWindow || miniPlayerWindow.isDestroyed()) return;
+  miniPlayerWindow.setAlwaysOnTop(Boolean(enabled));
+});
+ipcMain.on('mini-player:close', event => { if (event.sender === miniPlayerWindow?.webContents) miniPlayerWindow?.hide(); });
 ipcMain.handle('window:setZoomFactor', (event, factor) => {
   const zoom = Number(factor);
   if (!Number.isFinite(zoom) || zoom < 1 || zoom > 1.75 || event.sender !== win?.webContents) return false;

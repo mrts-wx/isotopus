@@ -1,0 +1,64 @@
+*{box-sizing:border-box}
+html,body{width:100%;height:100%;margin:0;overflow:hidden;font:13px Inter,system-ui,sans-serif;color:#30343a;background:transparent}
+body.dark{color:#e4e8eb}
+.mini-shell{position:relative;width:100%;height:100%;padding:12px 14px;border:1px solid #d7cbbb;border-radius:20px;background:rgba(247,240,232,.97);box-shadow:0 12px 35px #0003;overflow:hidden;transition:background .25s ease,border-color .25s ease}
+body.dark .mini-shell{border-color:#3a4247;background:rgba(31,36,39,.97)}
+.mini-main{position:relative;z-index:1;display:flex;align-items:center;gap:11px;min-width:0;height:48px}
+.mini-cover{width:48px;height:48px;flex:0 0 48px;overflow:hidden;border:1px solid #899e8d;border-radius:12px;background:linear-gradient(145deg,#e8d7c1,#ffb353)}
+.mini-cover img{display:block;width:100%;height:100%;object-fit:cover}
+.mini-info{display:grid;min-width:0;flex:1;gap:4px;padding-right:6px}
+.mini-info b,.mini-info small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mini-info b{font-size:13px;line-height:1.25}.mini-info small{font-size:11px;line-height:1.25;color:#767c82}body.dark .mini-info small{color:#abb4ba}
+.mini-main>button,.transport-controls>button,.mini-volume-toggle{position:relative;z-index:2;display:grid;place-items:center;width:32px;height:32px;flex:0 0 32px;padding:0;border:1px solid #d4c9bb;border-radius:10px;background:rgba(255,255,255,.34);color:inherit;font-size:14px;cursor:pointer}
+body.dark .mini-main>button,body.dark .transport-controls>button,body.dark .mini-volume-toggle{border-color:#424b50;background:rgba(255,255,255,.045)}
+.mini-main>button:hover,.transport-controls>button:hover,.mini-volume-toggle:hover{border-color:#ff6e4a}
+.mini-controls{position:relative;z-index:1;display:flex;align-items:center;gap:8px;margin-top:10px;height:30px;min-width:0}
+.transport-controls{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.transport-controls>button{width:30px;height:30px;flex-basis:30px}
+.transport-controls .mini-play{width:34px;height:32px;flex-basis:34px;border:0;border-radius:11px;background:#ff6e4a;color:white}
+.mini-controls>span{flex:0 0 auto;color:#8b8580;font-size:9px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mini-seek{display:block;width:40px;height:18px;min-width:35px;flex:1;accent-color:#ff6e4a;cursor:pointer}
+.mini-volume-control{position:relative;z-index:3;flex:0 0 auto;margin-left:2px}
+.mini-volume-toggle{width:32px;height:32px;border:0;background:transparent!important}
+.mini-volume-toggle svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.mini-volume-popover{position:absolute;right:0;bottom:40px;display:flex;align-items:center;width:132px;height:42px;padding:0 10px;border:1px solid #d4c9bb;border-radius:12px;background:rgba(247,240,232,.98);box-shadow:0 8px 24px #0003}
+body.dark .mini-volume-popover{border-color:#424b50;background:rgba(31,36,39,.98)}
+.mini-volume-popover[hidden]{display:none}
+.mini-volume-popover input{width:100%;height:18px;accent-color:#ff6e4a;cursor:pointer}
+.drag-region{position:absolute;inset:0;z-index:0;width:100%;height:100%;border:0;background:transparent;-webkit-app-region:drag;cursor:grab}
+.mini-main button,.mini-controls button,.mini-controls input,.mini-volume-control{-webkit-app-region:no-drag}
+.mini-shell:has(.mini-pin[aria-pressed="true"]){border-color:#ff6e4a}
+body.compact .mini-shell{padding:10px 12px}
+body.compact .mini-main{height:48px}
+body.compact .mini-controls{display:none}
+body[data-surface-style="glass"] .mini-shell{background:rgba(28,32,34,.46);backdrop-filter:blur(32px) saturate(155%);-webkit-backdrop-filter:blur(32px) saturate(155%);box-shadow:inset 0 1px 0 #ffffff20,0 12px 34px #0003}
+body:not(.dark)[data-surface-style="glass"] .mini-shell{background:rgba(247,240,232,.48)}
+body[data-surface-style="mica"] .mini-shell{background:rgba(32,36,38,.68);backdrop-filter:blur(20px) saturate(125%);-webkit-backdrop-filter:blur(20px) saturate(125%)}
+body:not(.dark)[data-surface-style="mica"] .mini-shell{background:rgba(247,240,232,.68)}
+body.dynamic[data-surface-style="normal"] .mini-shell{background-color:color-mix(in srgb,var(--cover-tone,#ff6e4a) 24%,rgba(31,36,39,.95))}
+body.dynamic:not(.dark)[data-surface-style="normal"] .mini-shell{background-color:color-mix(in srgb,var(--cover-tone,#ff6e4a) 22%,rgba(247,240,232,.96))}
+body.dynamic[data-surface-style="mica"] .mini-shell{background-color:color-mix(in srgb,var(--cover-tone,#ff6e4a) 24%,rgba(32,36,38,.68))}
+body.dynamic:not(.dark)[data-surface-style="mica"] .mini-shell{background-color:color-mix(in srgb,var(--cover-tone,#ff6e4a) 24%,rgba(247,240,232,.68))}
+body.dynamic[data-surface-style="glass"] .mini-shell{background-color:color-mix(in srgb,var(--cover-tone,#ff6e4a) 22%,rgba(28,32,34,.46))}
+body.dynamic:not(.dark)[data-surface-style="glass"] .mini-shell{background-color:color-mix(in srgb,var(--cover-tone,#ff6e4a) 22%,rgba(247,240,232,.48))}
+@media(prefers-reduced-motion:reduce){.mini-shell{transition:none}}
+/* Match the main dock: Mica shows more of the background; Glass is clearer and more blurred. */
+body[data-surface-style="mica"] .mini-shell{background:rgba(32,36,39,.48);backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%)}
+body:not(.dark)[data-surface-style="mica"] .mini-shell{background:rgba(247,240,232,.5)}
+body[data-surface-style="glass"] .mini-shell{background:rgba(28,32,34,.22);backdrop-filter:blur(40px) saturate(185%);-webkit-backdrop-filter:blur(40px) saturate(185%);box-shadow:inset 0 1px 0 #ffffff35,0 12px 34px #0003}
+body:not(.dark)[data-surface-style="glass"] .mini-shell{background:rgba(247,240,232,.24)}
+body.dynamic.dark[data-surface-style="mica"] .mini-shell{background-color:rgba(32,36,39,.48);background-image:linear-gradient(color-mix(in srgb,var(--cover-tone,#ff6e4a) 18%,transparent),color-mix(in srgb,var(--cover-tone,#ff6e4a) 18%,transparent))}
+body.dynamic.dark[data-surface-style="glass"] .mini-shell{background-color:rgba(28,32,34,.22);background-image:linear-gradient(color-mix(in srgb,var(--cover-tone,#ff6e4a) 12%,transparent),color-mix(in srgb,var(--cover-tone,#ff6e4a) 12%,transparent))}
+body.dynamic:not(.dark)[data-surface-style="mica"] .mini-shell{background-color:rgba(247,240,232,.5);background-image:linear-gradient(color-mix(in srgb,var(--cover-tone,#ff6e4a) 18%,transparent),color-mix(in srgb,var(--cover-tone,#ff6e4a) 18%,transparent))}
+body.dynamic:not(.dark)[data-surface-style="glass"] .mini-shell{background-color:rgba(247,240,232,.24);background-image:linear-gradient(color-mix(in srgb,var(--cover-tone,#ff6e4a) 12%,transparent),color-mix(in srgb,var(--cover-tone,#ff6e4a) 12%,transparent))}
+@media(prefers-reduced-transparency:reduce){body[data-surface-style="mica"] .mini-shell,body[data-surface-style="glass"] .mini-shell{background-image:none!important;background-color:rgba(31,36,39,.97)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}body:not(.dark)[data-surface-style="mica"] .mini-shell,body:not(.dark)[data-surface-style="glass"] .mini-shell{background-color:rgba(247,240,232,.97)!important}}
+@keyframes mini-cover-neon{0%,100%{box-shadow:0 0 0 1px color-mix(in srgb,var(--cover-tone,#ff6e4a) 30%,transparent),0 0 8px color-mix(in srgb,var(--cover-tone,#ff6e4a) 24%,transparent)}50%{box-shadow:0 0 0 1.5px color-mix(in srgb,var(--cover-tone,#ff6e4a) 78%,transparent),0 0 18px color-mix(in srgb,var(--cover-tone,#ff6e4a) 50%,transparent)}}
+body.dynamic .mini-shell{border-color:color-mix(in srgb,var(--cover-tone,#ff6e4a) 68%,#6b7378);animation:mini-cover-neon 3s ease-in-out infinite}
+body.dynamic .mini-main>button,body.dynamic .transport-controls>button,body.dynamic .mini-volume-toggle{border-color:color-mix(in srgb,var(--cover-tone,#ff6e4a) 52%,#6b7378);animation:mini-cover-neon 3s ease-in-out infinite}
+@media(prefers-reduced-motion:reduce){body.dynamic .mini-shell,body.dynamic .mini-main>button,body.dynamic .transport-controls>button,body.dynamic .mini-volume-toggle{animation:none!important}body.dynamic .mini-shell{box-shadow:0 0 10px color-mix(in srgb,var(--cover-tone,#ff6e4a) 40%,transparent)}}
+/* Keep the cover-color animation inside the floating window's rounded edges. */
+@keyframes mini-cover-neon-inset{0%,100%{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cover-tone,#ff6e4a) 34%,transparent),inset 0 0 12px color-mix(in srgb,var(--cover-tone,#ff6e4a) 8%,transparent)}50%{box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--cover-tone,#ff6e4a) 78%,transparent),inset 0 0 18px color-mix(in srgb,var(--cover-tone,#ff6e4a) 14%,transparent)}}
+@keyframes mini-control-neon-inset{0%,100%{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cover-tone,#ff6e4a) 34%,transparent)}50%{box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--cover-tone,#ff6e4a) 78%,transparent)}}
+body.dynamic .mini-shell{animation:mini-cover-neon-inset 3s ease-in-out infinite!important}
+body.dynamic .mini-main>button,body.dynamic .transport-controls>button,body.dynamic .mini-volume-toggle{animation:mini-control-neon-inset 3s ease-in-out infinite!important}
+@media(prefers-reduced-motion:reduce){body.dynamic .mini-shell,body.dynamic .mini-main>button,body.dynamic .transport-controls>button,body.dynamic .mini-volume-toggle{animation:none!important}body.dynamic .mini-shell{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cover-tone,#ff6e4a) 52%,transparent)!important}}

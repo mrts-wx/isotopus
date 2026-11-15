@@ -1,15 +1,12 @@
 {
   "name": "isotopus",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "private": true,
-  "author": {
-    "name": "Local Build",
-    "email": "local@localhost"
-  },
+  "author": "omartinss",
   "desktopName": "com.isotopus.musicplayer",
   "description": "Player local de música com playlists e letras sincronizadas, incluindo alinhamento automático",
   "homepage": "https://github.com/mrts-wx/isotopus",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "main": "src/main/main.js",
   "scripts": {
     "start": "node scripts/patch-transformers-electron.js && electron .",
@@ -39,6 +36,7 @@
     "files": [
       "src/**",
       "README.md",
+      "LICENSE",
       "package.json",
       "node_modules/**",
       "!node_modules/sharp/**",
@@ -50,6 +48,7 @@
       "target": [
         "deb"
       ],
+      "maintainer": "omartinss",
       "category": "AudioVideo",
       "icon": "src/assets/icons",
       "syncDesktopName": true,
