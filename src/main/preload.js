@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('isotopus', {
   setZoomFactor: factor => ipcRenderer.invoke('window:setZoomFactor', factor),
   chooseMusicFolder: () => ipcRenderer.invoke('library:chooseFolder'),
   removeMusicFolder: folder => ipcRenderer.invoke('library:removeFolder', folder),
+  deleteMusicTrack: id => ipcRenderer.invoke('library:deleteTrack', id),
   rescanLibrary: () => ipcRenderer.invoke('library:rescan'),
   mediaUrl: id => ipcRenderer.invoke('library:mediaUrl', id),
   exportPlaylist: tracks => ipcRenderer.invoke('playlist:export', tracks),

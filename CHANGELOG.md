@@ -1,3 +1,30 @@
+# Isótopus 0.2.5 — Aparência adaptável e ações rápidas
+
+## Tema e aparência
+
+- Popup de aparência para escolher a paleta automática, clara ou escura. Mica, Vidro e fundos dinâmicos foram removidos temporariamente enquanto os efeitos são revisados. Os fundos da tela, do topo, da lateral e do miniplayer agora usam a mesma base em cada tema.
+- Fundos consistentes entre a tela principal, barra superior, lateral e miniplayer, sem mistura de cores de capa.
+- O tema escuro usa tons grafite neutros com detalhes coral, substituindo o verde que tingia grandes áreas da interface.
+- O player de letras ganhou um controle de volume recolhível e atalho direto para o equalizador, incluindo ativação e desativação junto do editor de bandas. O brilho pulsante da linha ativa ficou mais evidente nos temas claro e escuro.
+- O controle de volume agora usa um ícone de alto-falante mais legível.
+- A seleção da dock lateral desliza entre as páginas com uma animação suave e respeita a preferência por movimento reduzido.
+
+## Ações de faixa
+
+- O menu de três linhas em cada faixa oferece adicionar/remover de playlist, favoritar, colocar como próxima na fila e excluir o arquivo. O popup escolhe abrir para cima ou para baixo conforme o espaço disponível.
+- A exclusão pede confirmação e o processo principal valida que o arquivo pertence a uma pasta monitorada antes de removê-lo. As referências removidas também saem de favoritas, recentes, fila e playlists.
+
+## Estabilidade e desempenho
+
+- Preferências de aparência são salvas localmente e aplicadas sem reiniciar o app.
+- Corrigida a inicialização dos controles: uma referência obsoleta interrompia a ligação dos botões de configurações, downloads, reprodução e volume, além de impedir a leitura da biblioteca ao abrir.
+- A pasta de cache é criada antes de salvar capas; capas ausentes em índices antigos são reconstruídas pelas tags dos arquivos.
+- A leitura inicial da biblioteca evita varreduras concorrentes, reduzindo disputa pelo cache ao iniciar.
+- O texto em foco nas letras tem mais espaço nas laterais, sem cortar o brilho nas bordas; a troca entre versos agora usa uma transição curta e suave e respeita movimento reduzido.
+- O botão que abre o controle de volume na tela de letras agora usa o mesmo ícone de alto-falante do miniplayer.
+
+---
+
 # Isótopus 0.2.4 — Downloads mais estáveis e navegação organizada
 
 ## Downloads em playlists

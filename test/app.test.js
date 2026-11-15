@@ -12,7 +12,7 @@ const { parseLyrics, formatLyrics, rankLyricsRecords, alignLyricsToTranscript } 
 const { repairFlacPictureMime } = require('../src/main/services/flac');
 
 const root = path.resolve(__dirname, '..');
-const sourcePaths = { 'main.js': 'src/main/main.js', 'preload.js': 'src/main/preload.js', 'app.js': 'src/renderer/app.js', 'index.html': 'src/renderer/index.html', 'styles.css': 'src/renderer/styles/styles.css', 'theme.css': 'src/renderer/styles/theme.css', 'motion.css': 'src/renderer/styles/motion.css', 'local.css': 'src/renderer/styles/local.css', 'polish.css': 'src/renderer/styles/polish.css', 'clarity.css': 'src/renderer/styles/clarity.css', 'lyrics.css': 'src/renderer/styles/lyrics.css', 'features.css': 'src/renderer/styles/features.css', 'home-player.css': 'src/renderer/styles/home-player.css', 'lyrics.js': 'src/shared/lyrics.js', 'shuffle.js': 'src/shared/shuffle.js', 'lyrics-worker.cjs': 'src/main/workers/lyrics-worker.cjs', 'no-cover.svg': 'src/assets/no-cover.svg', 'Discord-description.txt': 'docs/Discord-description.txt', 'equalizer-controller.js': 'src/renderer/controllers/equalizer-controller.js', 'lyrics-controller.js': 'src/main/controllers/lyrics-controller.js' };
+const sourcePaths = { 'main.js': 'src/main/main.js', 'preload.js': 'src/main/preload.js', 'app.js': 'src/renderer/app.js', 'index.html': 'src/renderer/index.html', 'styles.css': 'src/renderer/styles/styles.css', 'theme.css': 'src/renderer/styles/theme.css', 'motion.css': 'src/renderer/styles/motion.css', 'local.css': 'src/renderer/styles/local.css', 'polish.css': 'src/renderer/styles/polish.css', 'clarity.css': 'src/renderer/styles/clarity.css', 'lyrics.css': 'src/renderer/styles/lyrics.css', 'features.css': 'src/renderer/styles/features.css', 'home-player.css': 'src/renderer/styles/home-player.css', 'refresh-022.css': 'src/renderer/styles/refresh-022.css', 'lyrics.js': 'src/shared/lyrics.js', 'shuffle.js': 'src/shared/shuffle.js', 'lyrics-worker.cjs': 'src/main/workers/lyrics-worker.cjs', 'no-cover.svg': 'src/assets/no-cover.svg', 'Discord-description.txt': 'docs/Discord-description.txt', 'equalizer-controller.js': 'src/renderer/controllers/equalizer-controller.js', 'lyrics-controller.js': 'src/main/controllers/lyrics-controller.js' };
 const read = name => fsSync.readFileSync(path.join(root, sourcePaths[name] || name), 'utf8');
 
 function makeWav() {
@@ -23,6 +23,16 @@ function makeWav() {
   buffer.writeUInt16LE(1, 22); buffer.writeUInt32LE(sampleRate, 24); buffer.writeUInt32LE(sampleRate * 2, 28);
   buffer.writeUInt16LE(2, 32); buffer.writeUInt16LE(16, 34); buffer.write('data', 36); buffer.writeUInt32LE(dataBytes, 40);
   return buffer;
+}
+
+function makeMp3WithCover() {
+  const image = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]);
+  const picture = Buffer.concat([Buffer.from([0]), Buffer.from('image/png\0', 'latin1'), Buffer.from([3, 0]), image]);
+  const frame = Buffer.alloc(10);
+  frame.write('APIC', 0); frame.writeUInt32BE(picture.length, 4);
+  const body = Buffer.concat([frame, picture]);
+  const header = Buffer.from([0x49, 0x44, 0x33, 3, 0, 0, (body.length >> 21) & 127, (body.length >> 14) & 127, (body.length >> 7) & 127, body.length & 127]);
+  return Buffer.concat([header, body]);
 }
 
 test('local app serves its UI and blocks file path traversal', async () => {
@@ -80,6 +90,28 @@ test('library scan reads tags and identifies a local WAV as lossless', async () 
     const restored = createLibrary(cache);
     assert.equal((await restored.scan([music], 'http://localhost:4321'))[0].id, tracks[0].id);
     assert.equal(restored.resolveTrackPath(tracks[0].id), file);
+  } finally { await fs.rm(temp, { recursive: true, force: true }); }
+});
+
+test('library creates its cache before writing covers and restores missing cover files', async () => {
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'isotopus-cover-cache-'));
+  try {
+    const music = path.join(temp, 'music');
+    const cache = path.join(temp, 'cache');
+    await fs.mkdir(music);
+    await fs.writeFile(path.join(music, 'Cover fixture.mp3'), makeMp3WithCover());
+    const firstLibrary = createLibrary(cache);
+    const first = await firstLibrary.scan([music], 'http://localhost:4321');
+    assert.equal(first.length, 1);
+    assert.ok(first[0].coverId);
+    const coverPath = path.join(cache, `${first[0].coverId}.cover`);
+    assert.ok(fsSync.existsSync(coverPath));
+    await fs.rm(coverPath);
+    const reopenedLibrary = createLibrary(cache);
+    const reopened = await reopenedLibrary.scan([music], 'http://localhost:4321');
+    assert.ok(fsSync.existsSync(coverPath));
+    assert.equal(reopened[0].coverId, first[0].coverId);
+    assert.equal(reopenedLibrary.resolveAsset(first[0].coverId).path, coverPath);
   } finally { await fs.rm(temp, { recursive: true, force: true }); }
 });
 
@@ -258,14 +290,13 @@ test('v0.2.0 preserves the player features and adds local automatic lyric alignm
   assert.doesNotMatch(html, /data-view="(albums|recent|folders|queue)"/);
   assert.match(html, /id="queueToggle"/);
   assert.match(html, /id="queuePopover"/);
-  assert.match(html, /id="themeSelect"/);
-  assert.match(html, /data-option="system" aria-selected="true">Automático \(sistema\)/);
+  assert.match(html, /id="appearanceButton"/);
+  assert.match(html, /data-appearance-key="theme" data-appearance-value="system">Automático/);
   assert.match(html, /id="equalizerEnabled"/);
   assert.match(html, /id="equalizerPreset"/);
   assert.match(html, /id="equalizerBands"/);
   assert.match(html, /id="equalizerDialog"/);
-  assert.match(html, /id="editEqualizerButton"/);
-  assert.match(html, /data-settings-tab="equalizer"/);
+  assert.doesNotMatch(html, /id="editEqualizerButton"/);
   assert.doesNotMatch(html, /id="viewRecent"|Ver histórico/);
   assert.match(html, /id="playLibraryButton"/);
   assert.match(html, /id="shuffleLibraryButton"/);
@@ -305,6 +336,9 @@ test('v0.2.0 preserves the player features and adds local automatic lyric alignm
   assert.match(lyricsCss, /transform \.52s cubic-bezier\(\.22,1,\.36,1\)/);
   assert.doesNotMatch(lyricsCss, /\.lyrics-line\.active\{[^}]*background:/);
   assert.match(html, /skip-button/);
+  assert.match(html, /id="lyricsVolumeToggle"[^>]*title="Volume"[^>]*><svg/);
+  assert.equal((html.match(/class="speaker-body"/g) || []).length, 2);
+  assert.equal((html.match(/class="speaker-wave"/g) || []).length, 2);
   assert.match(app, /setPersistentStore/);
   assert.doesNotMatch(app, /localStorage/);
   const equalizer = read('equalizer-controller.js');
@@ -312,18 +346,21 @@ test('v0.2.0 preserves the player features and adds local automatic lyric alignm
   assert.match(equalizer, /createBiquadFilter/);
   assert.match(equalizer, /async function play\(deck\)/);
   assert.match(app, /function applyTheme/);
-  assert.match(app, /equalizer\.state\.values/);
-  assert.match(app, /Number\.parseFloat\(slider\.value\)/);
+  assert.match(read('equalizer-controller.js'), /state\.values/);
+  assert.match(equalizer, /Number\.parseFloat\(slider\.value\)/);
   assert.match(app, /function bindStyledSelect/);
-  assert.match(app, /function setSettingsTab/);
   assert.match(app, /function renderHome/);
   assert.match(app, /playLibraryButton/);
   assert.match(app, /cover-fallback/);
-  assert.match(app, /element\.classList\.toggle\('missing-cover', !source\)/);
+  assert.match(app, /function showCoverFallback\(element\)/);
+  assert.match(app, /element\.classList\.remove\('missing-cover'\)/);
   assert.match(app, /if \(!group\.coverUrl && track\.coverUrl\) group\.coverUrl = track\.coverUrl/);
   assert.match(read('home-player.css'), /\.quick-card,\.quick-card:hover,\.quick-card:active\{animation:none!important;opacity:1!important;transform:none!important/);
   assert.match(app, /function recoverAfterPlaybackError/);
   assert.match(app, /failedTracks\.has\(candidate\.id\)/);
+  assert.match(app, /rows\[next\]\?\.animate\(/);
+  assert.match(read('refresh-022.css'), /\.lyrics-scroll\{[^}]*overflow-x:clip[^}]*padding-inline:clamp\(/);
+  assert.match(read('refresh-022.css'), /\.lyrics-line\.active\{opacity:1\}/);
 });
 
 test('Discord presence and redundant queue controls are removed', () => {
@@ -336,20 +373,32 @@ test('folder selection hides the welcome panel and routes library settings to fo
   const app = read('app.js');
   const html = read('index.html');
   assert.match(app, /\$\('heroCard'\)\.hidden = folders\.length > 0/);
-  assert.match(app, /\$\('accountButton'\)\.addEventListener\('click', \(\) => folders\.length \? showSettings\(\) : chooseFolders\(\)\)/);
+  assert.doesNotMatch(html, /id="accountButton"/);
+  assert.match(html, /id="appearanceButton"/);
   assert.match(html, /class="hero-card" id="heroCard"/);
   assert.match(app, /function showSettings\(\) \{[\s\S]*renderFolderDialog\(\);[\s\S]*\$\('settingsDialog'\)\.showModal\(\);/);
+});
+
+test('renderer event bindings only reference controls present in the page', () => {
+  const app = read('app.js');
+  const html = read('index.html');
+  const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]));
+  const bindings = [...app.matchAll(/\$\('([^']+)'\)\.addEventListener\(/g)].map(match => match[1]);
+  const missing = [...new Set(bindings.filter(id => !ids.has(id)))];
+  assert.deepEqual(missing, [], `event handlers reference missing HTML IDs: ${missing.join(', ')}`);
+  assert.match(app, /\$\('volume'\)\.addEventListener\('input',[\s\S]*audio\.volume = baseVolume/);
+  assert.match(app, /loadLibrary\(\);\s*checkForAppUpdate/);
 });
 
 test('desktop identity, app clarity, and launcher icon are configured', () => {
   const pkg = JSON.parse(read('package.json'));
   const app = read('app.js');
   assert.equal(pkg.name, 'isotopus');
-  assert.equal(pkg.version, '0.2.4');
+  assert.equal(pkg.version, '0.2.5');
   assert.equal(pkg.dependencies['@huggingface/transformers'], '^3.8.1');
-  assert.equal(pkg.scripts['build:debian'], 'electron-builder --linux deb');
-  assert.equal(pkg.scripts['build:arch'], 'electron-builder --linux pacman');
-  assert.equal(pkg.scripts['build:windows'], 'electron-builder --win nsis');
+  assert.equal(pkg.scripts['build:debian'], 'node scripts/patch-transformers-electron.js && electron-builder --linux deb');
+  assert.equal(pkg.scripts['build:arch'], 'node scripts/patch-transformers-electron.js && electron-builder --linux pacman');
+  assert.equal(pkg.scripts['build:windows'], 'node scripts/patch-transformers-electron.js && electron-builder --win nsis');
   assert.match(pkg.description, /playlists e letras sincronizadas/);
   assert.equal(pkg.build.productName, 'Isótopus');
   assert.equal(pkg.build.linux.icon, 'src/assets/icons');

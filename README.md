@@ -5,11 +5,13 @@ Player de música local para Linux e Windows, feito para organizar e ouvir uma c
 ## Recursos
 
 - Reprodução local de FLAC, WAV, AIFF, M4A/ALAC, MP3, AAC, Ogg e Opus, conforme o suporte do Electron e do sistema.
-- Biblioteca monitorada, playlists que podem ser renomeadas, reordenadas e excluídas, busca, favoritos e fila de reprodução.
+- Biblioteca monitorada, playlists que podem ser renomeadas, reordenadas e excluídas, busca, favoritos e fila de reprodução; ações rápidas por faixa para playlist, favorito, próxima música e exclusão confirmada do arquivo.
 - Letras LRC e sincronização manual por faixa.
 - Busca automática de letras no LRCLIB e sincronização estimada de letras sem tempos com o áudio local.
-- Temas claro, escuro e automático, escala de interface ajustável entre 100% e 175%, além de equalizador com perfis.
+- Temas claro, escuro e automático com fundos consistentes na tela, lateral, topo e miniplayer; escala de 100% a 175%.
 - Marcador do player animado durante a reprodução, com suporte à preferência por movimento reduzido.
+- Abertura corrigida para carregar pastas monitoradas e ativar todos os controles; cache de capas recupera imagens ausentes.
+- Letras em foco recebem transição suave, e o brilho tem margem para não ser cortado nas laterais.
 - Downloads opcionais via yt-dlp oficial: faixas ou playlists com progresso individual no gerenciador de downloads, retentativas e pausas entre itens, metadados e capa no MP3; exige consentimento e FFmpeg. Playlists processam até 100 itens, e Spotify não fornece áudio para este fluxo.
 - Aviso de novas versões com link para o instalador apropriado de Ubuntu/Debian, Arch ou Windows.
 - Pacotes de distribuição para Debian/Ubuntu, Arch e Windows.
@@ -46,7 +48,7 @@ Os arquivos gerados ficam em `dist/`. O código do app fica em `src/`, organizad
 
 ## Builds publicadas
 
-Os instaladores históricos e atuais estão organizados em `release-assets/`, por versão (`v0.1.0` a `v0.2.4`). Eles são mantidos fora dos commits e enviados como anexos de Releases do GitHub, inclusive porque alguns arquivos ultrapassam o limite de tamanho de arquivos comuns do Git.
+Os instaladores históricos e atuais estão organizados em `release-assets/`, por versão (`v0.1.0` a `v0.2.5`). Eles são mantidos fora dos commits e enviados como anexos de Releases do GitHub, inclusive porque alguns arquivos ultrapassam o limite de tamanho de arquivos comuns do Git.
 
 
 ## Instalar uma build
@@ -57,7 +59,7 @@ Baixe o instalador da versão desejada na página **Releases** do repositório e
 - **Debian ou Ubuntu:** baixe `Isotopus-<versão>-amd64.deb`, abra um terminal na pasta do download e rode `sudo apt install ./Isotopus-<versão>-amd64.deb`. O `apt` instala o pacote e tenta resolver as dependências.
 - **Arch Linux:** baixe `Isotopus-<versão>-x64.pacman` e rode `sudo pacman -U ./Isotopus-<versão>-x64.pacman` no terminal, dentro da pasta do download.
 
-Substitua `<versão>` pelo número publicado, como `0.2.4`. Nem toda versão tem instalador para todos os sistemas; use um arquivo que esteja anexado à Release daquela versão. O [CHANGELOG](CHANGELOG.md) resume as mudanças da versão mais recente; cada Release também apresenta as notas daquela versão.
+Substitua `<versão>` pelo número publicado, como `0.2.5`. Nem toda versão tem instalador para todos os sistemas; use um arquivo que esteja anexado à Release daquela versão. O [CHANGELOG](CHANGELOG.md) resume as mudanças da versão mais recente; cada Release também apresenta as notas daquela versão.
 
 ### Sobre avisos de segurança
 

@@ -12,7 +12,7 @@ const YTDLP_API = 'https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest';
 
 function requestJson(url) {
   return new Promise((resolve, reject) => {
-    https.get(url, { headers: { 'User-Agent': 'Isotopus/0.2.4', Accept: 'application/vnd.github+json' } }, response => {
+    https.get(url, { headers: { 'User-Agent': 'Isotopus/0.2.5', Accept: 'application/vnd.github+json' } }, response => {
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) return requestJson(response.headers.location).then(resolve, reject);
       if (response.statusCode !== 200) { response.resume(); reject(new Error(`HTTP ${response.statusCode}`)); return; }
       let data = ''; response.setEncoding('utf8'); response.on('data', chunk => { data += chunk; if (data.length > 2_000_000) { response.destroy(new Error('Resposta muito grande')); } });
@@ -24,7 +24,7 @@ function requestJson(url) {
 function downloadFile(url, destination) {
   return new Promise((resolve, reject) => {
     const output = require('node:fs').createWriteStream(destination, { mode: 0o700 });
-    https.get(url, { headers: { 'User-Agent': 'Isotopus/0.2.4' } }, response => {
+    https.get(url, { headers: { 'User-Agent': 'Isotopus/0.2.5' } }, response => {
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) { output.close(); require('node:fs').unlink(destination, () => {}); return downloadFile(response.headers.location, destination).then(resolve, reject); }
       if (response.statusCode !== 200) { output.close(); require('node:fs').unlink(destination, () => {}); reject(new Error(`Download HTTP ${response.statusCode}`)); return; }
       response.pipe(output); output.on('finish', () => output.close(resolve));

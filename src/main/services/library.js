@@ -91,6 +91,7 @@ function createLibrary(cacheDirectory) {
   }
   async function scan(folders, origin) {
     await loadCache();
+    if (cacheDirectory) await fs.mkdir(cacheDirectory, { recursive: true });
     if (!cachedParser) cachedParser = import('music-metadata').then(module => module.parseFile);
     const parseFile = await cachedParser;
     const files = await findAudioFiles(folders);
@@ -112,6 +113,10 @@ function createLibrary(cacheDirectory) {
           const signature = `${stat.size}:${stat.mtimeMs}`;
           const prior = cache.get(file);
           let track = prior?.signature === signature ? prior.track : await parseTrack(file, stat, parseFile);
+          if (prior?.signature === signature && track.coverId && cacheDirectory) {
+            try { await fs.access(path.join(cacheDirectory, `${track.coverId}.cover`)); }
+            catch { track = await parseTrack(file, stat, parseFile); }
+          }
           let playbackPath = prior?.signature === signature ? prior.playbackPath || '' : '';
           if (playbackPath) {
             try { await fs.access(playbackPath); } catch { playbackPath = ''; }
