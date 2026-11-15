@@ -9,7 +9,7 @@ Em **Configurações → Tema e aparência**, abra **Personalizar** para escolhe
 - **Paleta:** Automático, Claro ou Escuro.
 - O tema claro, escuro e automático usa fundos consistentes na tela, na lateral, no topo e no miniplayer.
 
-As configurações estão separadas por Biblioteca, Aparência, Janela e Reprodução. Mica, Vidro e fundos dinâmicos foram pausados nesta build enquanto os efeitos visuais são revisados. O equalizador pode ser aberto pelo player, onde também é possível ativar ou desativar o efeito. A dock lateral desliza até a nova aba selecionada. No player de letras, os controles também oferecem volume recolhível e acesso direto ao equalizador, cuja ativação fica junto dos ajustes de bandas. A linha ativa da letra tem brilho pulsante mais visível nos dois temas.
+As configurações estão separadas por Biblioteca, Aparência, Janela e Reprodução. O equalizador pode ser aberto pelo player, onde também é possível ativar ou desativar o efeito. A dock lateral desliza até a nova aba selecionada. No player de letras, os controles também oferecem volume recolhível e acesso direto ao equalizador, cuja ativação fica junto dos ajustes de bandas. A linha ativa da letra tem brilho pulsante mais visível nos dois temas.
 
 ## Menu de faixa
 

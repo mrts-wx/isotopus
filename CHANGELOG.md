@@ -2,7 +2,7 @@
 
 ## Tema e aparência
 
-- Popup de aparência para escolher a paleta automática, clara ou escura. Mica, Vidro e fundos dinâmicos foram removidos temporariamente enquanto os efeitos são revisados. Os fundos da tela, do topo, da lateral e do miniplayer agora usam a mesma base em cada tema.
+- Popup de aparência para escolher a paleta automática, clara ou escura; os fundos da tela, do topo, da lateral e do miniplayer usam uma base coerente em cada tema.
 - Fundos consistentes entre a tela principal, barra superior, lateral e miniplayer, sem mistura de cores de capa.
 - O tema escuro usa tons grafite neutros com detalhes coral, substituindo o verde que tingia grandes áreas da interface.
 - O player de letras ganhou um controle de volume recolhível e atalho direto para o equalizador, incluindo ativação e desativação junto do editor de bandas. O brilho pulsante da linha ativa ficou mais evidente nos temas claro e escuro.
