@@ -1,3 +1,11 @@
+# Isótopus 0.2.81 — Pequena correção de menu
+
+- O menu de opções das músicas agora se reposiciona dentro dos limites da janela, abrindo para cima ou para baixo conforme o espaço disponível e ajustando a posição horizontal para não ficar cortado.
+- O menu fecha ao rolar a biblioteca, evitando que fique solto longe da música correspondente.
+- “Limpar concluídos” agora remove faixas finalizadas dentro de uma playlist em andamento, preservando as faixas que ainda estão baixando.
+
+---
+
 # Isótopus 0.2.8 — Manutenção de memória e estabilidade
 
 Ajustes internos para manter o uso de memória previsível em sessões longas, sem mudanças na interface ou nos recursos visuais.

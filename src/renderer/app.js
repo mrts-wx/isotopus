@@ -230,7 +230,7 @@ function renderDownloadJobs() {
   const activeCount = downloadJobs.filter(job => job.status === 'running').length;
   const badge = $('downloadManagerBadge'); badge.hidden = activeCount === 0; badge.textContent = String(activeCount);
   $('downloadManagerEmpty').hidden = downloadJobs.length > 0;
-  $('clearDownloadHistoryButton').disabled = !downloadJobs.some(job => job.status !== 'running');
+  $('clearDownloadHistoryButton').disabled = !downloadJobs.some(job => job.status !== 'running' || job.tracks.some(track => track.status === 'done' || track.status === 'error'));
   for (const job of downloadJobs.slice(-20).reverse()) {
     const batch = document.createElement('section'); batch.className = `download-batch ${job.status}`;
     const batchHead = document.createElement('div'); batchHead.className = 'download-batch-head';
@@ -568,6 +568,37 @@ function requestTrackDeletion(track) {
   $('deleteTrackName').textContent = track.title;
   $('deleteTrackDialog').showModal();
 }
+function closeTrackActionMenu(menu) {
+  const trigger = menu?._triggerButton;
+  menu.hidden = true;
+  trigger?.setAttribute('aria-expanded', 'false');
+  menu.classList.remove('opens-up');
+  menu.style.cssText = '';
+  if (menu?._trackActions?.isConnected && menu.parentElement !== menu._trackActions) menu._trackActions.append(menu);
+  else if (!menu?._trackActions?.isConnected) menu.remove();
+}
+function positionTrackActionMenu(menu, trigger) {
+  const margin = 10;
+  const anchor = trigger.getBoundingClientRect();
+  const width = menu.getBoundingClientRect().width;
+  const height = menu.getBoundingClientRect().height;
+  const spaceBelow = innerHeight - anchor.bottom - margin * 2;
+  const spaceAbove = anchor.top - margin * 2;
+  const opensUp = spaceBelow < height && spaceAbove > spaceBelow;
+  const availableHeight = Math.max(100, opensUp ? spaceAbove : spaceBelow);
+  const top = opensUp
+    ? Math.max(margin, anchor.top - Math.min(height, availableHeight) - 6)
+    : Math.min(innerHeight - margin - Math.min(height, availableHeight), anchor.bottom + 6);
+  const left = Math.max(margin, Math.min(anchor.right - width, innerWidth - width - margin));
+  menu.classList.toggle('opens-up', opensUp);
+  menu.style.position = 'fixed';
+  menu.style.left = `${left}px`;
+  menu.style.right = 'auto';
+  menu.style.top = `${top}px`;
+  menu.style.bottom = 'auto';
+  menu.style.maxHeight = `${availableHeight}px`;
+  menu.style.overflowY = 'auto';
+}
 function createTrackCard(item, items, kind) {
   const card = document.createElement('article'); card.className = 'result-card';
   const main = document.createElement('button'); main.className = 'result-main'; main.type = 'button';
@@ -621,7 +652,8 @@ function createTrackCard(item, items, kind) {
     }
     const menuButton = document.createElement('button'); menuButton.type = 'button'; menuButton.className = 'track-menu-button'; menuButton.innerHTML = '<span aria-hidden="true">☰</span>'; menuButton.title = 'Mais opções'; menuButton.setAttribute('aria-label', `Mais opções para ${item.title}`); menuButton.setAttribute('aria-expanded', 'false');
     const menu = document.createElement('div'); menu.className = 'track-action-menu'; menu.hidden = true; menu.setAttribute('role', 'menu');
-    const addAction = (label, symbol, handler, danger = false) => { const button = document.createElement('button'); button.type = 'button'; button.className = danger ? 'track-action-option danger' : 'track-action-option'; button.setAttribute('role', 'menuitem'); button.innerHTML = `<span aria-hidden="true">${symbol}</span><b>${label}</b>`; button.addEventListener('click', event => { event.stopPropagation(); menu.hidden = true; menuButton.setAttribute('aria-expanded', 'false'); handler(); }); menu.append(button); };
+    menu._triggerButton = menuButton; menu._trackActions = actions;
+    const addAction = (label, symbol, handler, danger = false) => { const button = document.createElement('button'); button.type = 'button'; button.className = danger ? 'track-action-option danger' : 'track-action-option'; button.setAttribute('role', 'menuitem'); button.innerHTML = `<span aria-hidden="true">${symbol}</span><b>${label}</b>`; button.addEventListener('click', event => { event.stopPropagation(); closeTrackActionMenu(menu); handler(); }); menu.append(button); };
     if (inPlaylist) addAction('Remover desta playlist', '−', () => { const playlist = playlists.find(entry => entry.id === activeView.slice('playlist:'.length)); if (playlist) { playlist.trackIds = playlist.trackIds.filter(id => id !== item.id); savePlaylists(); openView(activeView, false); toast('Faixa removida da playlist.'); } });
     else addAction('Adicionar à playlist', '＋', () => openPlaylistPicker(item));
     addAction(safeArray('favorites').includes(item.id) ? 'Remover das favoritas' : 'Adicionar às favoritas', '♡', () => toggleFavorite(item));
@@ -629,9 +661,12 @@ function createTrackCard(item, items, kind) {
     addAction('Excluir arquivo do computador', '⌫', () => requestTrackDeletion(item), true);
     menuButton.addEventListener('click', event => {
       event.stopPropagation(); const opening = menu.hidden;
-      document.querySelectorAll('.track-action-menu:not([hidden])').forEach(other => { other.hidden = true; other.parentElement?.querySelector('.track-menu-button')?.setAttribute('aria-expanded', 'false'); });
-      menu.hidden = !opening; menuButton.setAttribute('aria-expanded', String(opening));
-      if (opening) requestAnimationFrame(() => { const rect = menu.getBoundingClientRect(); menu.classList.toggle('opens-up', rect.bottom > innerHeight - 14); });
+      document.querySelectorAll('.track-action-menu:not([hidden])').forEach(closeTrackActionMenu);
+      if (!opening) return;
+      document.body.append(menu);
+      menu.hidden = false;
+      menuButton.setAttribute('aria-expanded', 'true');
+      requestAnimationFrame(() => positionTrackActionMenu(menu, menuButton));
     });
     actions.append(menuButton, menu); card.append(actions);
   }
@@ -1530,15 +1565,23 @@ $('confirmDeleteTrack').addEventListener('click', async () => {
 });
 $('settingsButton').addEventListener('click', showSettings);
 $('downloadManagerButton').addEventListener('click', () => { const menu = $('downloadManagerMenu'), opening = menu.hidden; menu.hidden = !opening; $('downloadManagerButton').setAttribute('aria-expanded', String(opening)); });
-$('clearDownloadHistoryButton').addEventListener('click', () => { for (let i = downloadJobs.length - 1; i >= 0; i--) if (downloadJobs[i].status !== 'running') downloadJobs.splice(i, 1); renderDownloadJobs(); });
-document.addEventListener('pointerdown', event => { if (!event.target.closest('.track-actions')) document.querySelectorAll('.track-action-menu:not([hidden])').forEach(menu => { menu.hidden = true; menu.parentElement?.querySelector('.track-menu-button')?.setAttribute('aria-expanded', 'false'); }); });
+$('clearDownloadHistoryButton').addEventListener('click', () => {
+  for (let i = downloadJobs.length - 1; i >= 0; i--) {
+    const job = downloadJobs[i];
+    if (job.status !== 'running') downloadJobs.splice(i, 1);
+    else job.tracks = job.tracks.filter(track => track.status !== 'done' && track.status !== 'error');
+  }
+  renderDownloadJobs();
+});
+document.addEventListener('pointerdown', event => { if (!event.target.closest('.track-actions, .track-action-menu')) document.querySelectorAll('.track-action-menu:not([hidden])').forEach(closeTrackActionMenu); });
+document.addEventListener('scroll', () => document.querySelectorAll('.track-action-menu:not([hidden])').forEach(closeTrackActionMenu), true);
 document.addEventListener('pointerdown', event => { if (!event.target.closest('.download-manager-wrap')) { $('downloadManagerMenu').hidden = true; $('downloadManagerButton').setAttribute('aria-expanded', 'false'); } });
 $('learnButton').addEventListener('click', () => $('infoDialog').showModal()); $('infoDone').addEventListener('click', () => $('infoDialog').close());
 $('viewLibrary').addEventListener('click', () => openView('songs'));
 $('rescanLibrary').addEventListener('click', async () => { applyLibrary(await window.isotopus.rescanLibrary()); toast(`${tracks.length} faixas verificadas.`); });
 $('searchInput').addEventListener('input', event => { clearTimeout(searchTimer); const value = event.currentTarget.value; searchTimer = setTimeout(() => value.trim() ? searchLibrary(value.trim()) : openView(activeView), 120); });
 document.addEventListener('keydown', event => {
-  if (event.key === 'Escape') document.querySelectorAll('.track-action-menu:not([hidden])').forEach(menu => { menu.hidden = true; menu.parentElement?.querySelector('.track-menu-button')?.setAttribute('aria-expanded', 'false'); });
+  if (event.key === 'Escape') document.querySelectorAll('.track-action-menu:not([hidden])').forEach(closeTrackActionMenu);
   if (event.key === 'Escape' && $('appearanceDialog').open) $('appearanceDialog').close();
   if (event.key === 'Escape' && !$('downloadManagerMenu').hidden) { $('downloadManagerMenu').hidden = true; $('downloadManagerButton').setAttribute('aria-expanded', 'false'); }
   const target = event.target;

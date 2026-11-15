@@ -265,7 +265,7 @@ test('playlists, full-screen lyrics, and the Isótopus no-cover mark are include
   assert.match(html, /id="lyricsMinimize"/);
   assert.match(app, /Pesquisar letra na web/);
   assert.match(app, /Buscando automaticamente uma letra sincronizada/);
-  assert.match(app, /alignLyrics\(trackId, decoded\.samples/);
+  assert.match(app, /window\.isotopus\.alignLyrics\(trackId, samples/);
   assert.match(html, /id="lyricsAutoSyncButton"/);
   assert.match(html, /id="autoSyncLyricsMenuButton"/);
   assert.match(html, /id="lyricsPasteDialog"/);
@@ -394,7 +394,7 @@ test('desktop identity, app clarity, and launcher icon are configured', () => {
   const pkg = JSON.parse(read('package.json'));
   const app = read('app.js');
   assert.equal(pkg.name, 'isotopus');
-  assert.equal(pkg.version, '0.2.6');
+  assert.equal(pkg.version, '0.2.81');
   assert.equal(pkg.dependencies['@huggingface/transformers'], '^3.8.1');
   assert.equal(pkg.scripts['build:debian'], 'node scripts/patch-transformers-electron.js && electron-builder --linux deb');
   assert.equal(pkg.scripts['build:arch'], 'node scripts/patch-transformers-electron.js && electron-builder --linux pacman');
