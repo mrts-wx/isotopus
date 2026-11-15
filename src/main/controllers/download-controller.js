@@ -12,7 +12,7 @@ const YTDLP_API = 'https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest';
 
 function requestJson(url) {
   return new Promise((resolve, reject) => {
-    https.get(url, { headers: { 'User-Agent': 'Isotopus/0.2.3', Accept: 'application/vnd.github+json' } }, response => {
+    https.get(url, { headers: { 'User-Agent': 'Isotopus/0.2.4', Accept: 'application/vnd.github+json' } }, response => {
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) return requestJson(response.headers.location).then(resolve, reject);
       if (response.statusCode !== 200) { response.resume(); reject(new Error(`HTTP ${response.statusCode}`)); return; }
       let data = ''; response.setEncoding('utf8'); response.on('data', chunk => { data += chunk; if (data.length > 2_000_000) { response.destroy(new Error('Resposta muito grande')); } });
@@ -24,7 +24,7 @@ function requestJson(url) {
 function downloadFile(url, destination) {
   return new Promise((resolve, reject) => {
     const output = require('node:fs').createWriteStream(destination, { mode: 0o700 });
-    https.get(url, { headers: { 'User-Agent': 'Isotopus/0.2.3' } }, response => {
+    https.get(url, { headers: { 'User-Agent': 'Isotopus/0.2.4' } }, response => {
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) { output.close(); require('node:fs').unlink(destination, () => {}); return downloadFile(response.headers.location, destination).then(resolve, reject); }
       if (response.statusCode !== 200) { output.close(); require('node:fs').unlink(destination, () => {}); reject(new Error(`Download HTTP ${response.statusCode}`)); return; }
       response.pipe(output); output.on('finish', () => output.close(resolve));
@@ -108,7 +108,7 @@ function registerDownloadController({ app, ipcMain, getWindow, getSettings, save
     const output = path.join(targetDir, '%(title).180B [%(id)s].%(ext)s');
     running = true; emit({ status: 'running', message: 'Preparando o download…' });
     return new Promise(resolve => {
-      const args = ['--no-simulate', '--newline', '--progress', '--progress-template', 'download:ISOTOPUS_PROGRESS:%(progress._percent)s|%(info.playlist_index)s|%(info.playlist_count)s|%(info.title)s', '--yes-playlist', '--playlist-end', '100', '--ignore-errors', '--no-overwrites', '-f', 'bestaudio/best', '--extract-audio', '--audio-format', 'mp3', '--audio-quality', '0', '--embed-thumbnail', '--embed-metadata', '--output', output, '--print', 'before_dl:ISOTOPUS_ITEM:%(playlist_index)s|%(playlist_count)s|%(title)s', '--print', 'after_move:ISOTOPUS_DONE:%(playlist_index)s|%(playlist_count)s|%(title)s', url.href];
+      const args = ['--no-simulate', '--newline', '--progress', '--progress-template', 'download:ISOTOPUS_PROGRESS:%(progress._percent)s|%(info.playlist_index)s|%(info.playlist_count)s|%(info.title)s', '--yes-playlist', '--lazy-playlist', '--playlist-end', '100', '--ignore-errors', '--no-overwrites', '--concurrent-fragments', '1', '--sleep-requests', '1', '--sleep-interval', '5', '--max-sleep-interval', '10', '--retries', '8', '--fragment-retries', '8', '--extractor-retries', '5', '--retry-sleep', 'http:exp=1:20', '--retry-sleep', 'fragment:exp=1:16', '--retry-sleep', 'extractor:exp=1:16', '-f', 'bestaudio/best', '--extract-audio', '--audio-format', 'mp3', '--audio-quality', '0', '--embed-thumbnail', '--embed-metadata', '--output', output, '--print', 'before_dl:ISOTOPUS_ITEM:%(playlist_index)s|%(playlist_count)s|%(title)s', '--print', 'after_move:ISOTOPUS_DONE:%(playlist_index)s|%(playlist_count)s|%(title)s', url.href];
       let child;
       try { child = require('node:child_process').spawn(executable, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); }
       catch (error) { running = false; emit({ status: 'error', message: error.message }); resolve({ ok: false, error: `Falha ao iniciar o yt-dlp: ${error.message}` }); return; }

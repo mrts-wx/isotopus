@@ -111,7 +111,11 @@ function setDownloadStatus(message, error = false) {
 }
 function renderDownloadJobs() {
   const list = $('downloadList'); list.replaceChildren();
-  for (const job of downloadJobs.slice(-5).reverse()) {
+  const activeCount = downloadJobs.filter(job => job.status === 'running').length;
+  const badge = $('downloadManagerBadge'); badge.hidden = activeCount === 0; badge.textContent = String(activeCount);
+  $('downloadManagerEmpty').hidden = downloadJobs.length > 0;
+  $('clearDownloadHistoryButton').disabled = !downloadJobs.some(job => job.status !== 'running');
+  for (const job of downloadJobs.slice(-20).reverse()) {
     const batch = document.createElement('section'); batch.className = `download-batch ${job.status}`;
     const batchHead = document.createElement('div'); batchHead.className = 'download-batch-head';
     const batchTitle = document.createElement('b'); batchTitle.textContent = job.title;
@@ -164,7 +168,7 @@ async function startAudioDownload() {
   if (!folders.length) { setDownloadStatus('Adicione primeiro uma pasta monitorada nas configurações.', true); return; }
   let parsed; try { parsed = new URL(url); } catch { setDownloadStatus('Cole um link HTTP ou HTTPS válido.', true); return; }
   const job = { title: `${parsed.hostname}${parsed.pathname}`.slice(0, 140), message: 'Analisando o link…', status: 'running', tracks: [] }; currentDownloadJob = job; downloadJobs.push(job); if (downloadJobs.length > 20) downloadJobs.shift(); renderDownloadJobs();
-  $('downloadStartButton').disabled = true; setDownloadStatus('O yt-dlp está executando em segundo plano. Esta janela permanece disponível.');
+  $('downloadStartButton').disabled = true; setDownloadStatus('Download iniciado. Acompanhe o progresso das faixas no gerenciador no canto superior direito.');
   const result = await window.isotopus.downloadAudio({ url, folder: $('downloadFolder').value });
   $('downloadStartButton').disabled = folders.length === 0;
   if (result?.ok) { job.status = result.partial ? 'partial' : 'done'; job.message = result.playlistTruncated ? 'Limite de segurança: foram baixados apenas os primeiros 100 itens da playlist.' : result.partial ? `${result.errorCount} faixa(s) não puderam ser baixadas; as demais foram salvas.` : `Salvo em ${$('downloadFolder').value}`; setDownloadStatus(result.partial ? job.message : 'Download concluído. A pasta monitorada atualizará sua biblioteca automaticamente.', result.partial); $('downloadUrl').value = ''; }
@@ -209,8 +213,6 @@ function setPlayIcon(button, playing) {
 function setLibraryState() {
   const count = tracks.length;
   $('heroCard').hidden = folders.length > 0;
-  $('accountTitle').textContent = folders.length ? `${folders.length} pasta${folders.length > 1 ? 's' : ''} monitorada${folders.length > 1 ? 's' : ''}` : 'Escolher pasta de música';
-  $('accountSubtitle').textContent = count ? `${count} faixa${count === 1 ? '' : 's'} local${count === 1 ? '' : 'is'}` : 'Sua biblioteca fica no seu PC';
   $('connectionLabel').textContent = folders.length ? `${count} faixas · monitorando` : 'Nenhuma pasta monitorada';
   $('connectionLabel').previousElementSibling.classList.toggle('connected', Boolean(folders.length));
   $('libraryStatus').textContent = folders.length ? `${count} FAIXAS LOCAIS` : 'BIBLIOTECA LOCAL';
@@ -285,6 +287,14 @@ function renderHome() {
     empty.innerHTML = '<span class="home-empty-mark">♫</span><div><b>Seu próximo som começa aqui</b><small>Escolha uma pasta de músicas e suas capas aparecerão neste espaço.</small></div>';
     const button = document.createElement('button'); button.className = 'secondary-button'; button.textContent = 'Escolher pasta'; button.addEventListener('click', chooseFolders); empty.append(button); grid.append(empty);
   } else items.forEach(track => grid.append(createTrackCard(track, items, 'track')));
+  const albumGrid = $('albumHighlightsGrid'); albumGrid.replaceChildren();
+  const albumGroups = groupsForAlbums(tracks).sort((a, b) => b.count - a.count).slice(0, 6);
+  $('albumHighlightsSection').hidden = !albumGroups.length;
+  albumGroups.forEach(item => albumGrid.append(createTrackCard(item, albumGroups, 'album')));
+  const artistGrid = $('artistHighlightsGrid'); artistGrid.replaceChildren();
+  const artistGroups = groupsForArtists(tracks).sort((a, b) => b.tracks.length - a.tracks.length).slice(0, 6);
+  $('artistHighlightsSection').hidden = !artistGroups.length;
+  artistGroups.forEach(item => artistGrid.append(createTrackCard(item, artistGroups, 'artist')));
   const favoriteTracks = safeArray('favorites').map(id => tracks.find(track => track.id === id)).filter(Boolean).slice(0, 6);
   const favoriteGrid = $('favoritesHomeGrid'); favoriteGrid.replaceChildren();
   $('favoritesHomeEmpty').hidden = favoriteTracks.length > 0;
@@ -534,6 +544,7 @@ function openView(view, setSelected = true) {
   $('homeListening').hidden = view !== 'listen' || tracks.length === 0;
   $('quickSection').hidden = view !== 'listen'; $('catalogSection').hidden = view !== 'listen'; $('recentSection').hidden = view !== 'listen';
   $('favoritesHomeSection').hidden = view !== 'listen';
+  $('albumHighlightsSection').hidden = view !== 'listen' || !tracks.length; $('artistHighlightsSection').hidden = view !== 'listen' || !tracks.length;
   removeDynamic();
   if (view === 'downloads') { updateDownloadFolderOptions(); enterDownloadsView(); return; }
   if (view === 'listen') { renderHome(); return; }
@@ -1100,7 +1111,7 @@ function showSettings() {
 }
 
 document.querySelectorAll('.nav-item').forEach(button => button.addEventListener('click', () => openView(button.dataset.view)));
-document.querySelectorAll('.quick-card').forEach(button => button.addEventListener('click', () => openView(button.dataset.target)));
+document.querySelectorAll('[data-target]').forEach(button => button.addEventListener('click', () => openView(button.dataset.target)));
 $('downloadStartButton').addEventListener('click', startAudioDownload);
 $('downloadAddFolder').addEventListener('click', chooseFolders);
 $('downloadUrl').addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); startAudioDownload(); } });
@@ -1150,13 +1161,16 @@ document.addEventListener('pointerdown', event => {
     root.classList.remove('open'); root.querySelector('.styled-select-trigger').setAttribute('aria-expanded', 'false'); root.querySelector('.styled-select-menu').hidden = true;
   });
 });
-$('accountButton').addEventListener('click', () => folders.length ? showSettings() : chooseFolders());
 $('settingsButton').addEventListener('click', showSettings);
+$('downloadManagerButton').addEventListener('click', () => { const menu = $('downloadManagerMenu'), opening = menu.hidden; menu.hidden = !opening; $('downloadManagerButton').setAttribute('aria-expanded', String(opening)); });
+$('clearDownloadHistoryButton').addEventListener('click', () => { for (let i = downloadJobs.length - 1; i >= 0; i--) if (downloadJobs[i].status !== 'running') downloadJobs.splice(i, 1); renderDownloadJobs(); });
+document.addEventListener('pointerdown', event => { if (!event.target.closest('.download-manager-wrap')) { $('downloadManagerMenu').hidden = true; $('downloadManagerButton').setAttribute('aria-expanded', 'false'); } });
 $('learnButton').addEventListener('click', () => $('infoDialog').showModal()); $('infoDone').addEventListener('click', () => $('infoDialog').close());
 $('viewLibrary').addEventListener('click', () => openView('songs'));
 $('rescanLibrary').addEventListener('click', async () => { applyLibrary(await window.isotopus.rescanLibrary()); toast(`${tracks.length} faixas verificadas.`); });
 $('searchInput').addEventListener('input', event => { clearTimeout(searchTimer); const value = event.currentTarget.value; searchTimer = setTimeout(() => value.trim() ? searchLibrary(value.trim()) : openView(activeView), 120); });
 document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !$('downloadManagerMenu').hidden) { $('downloadManagerMenu').hidden = true; $('downloadManagerButton').setAttribute('aria-expanded', 'false'); }
   const target = event.target;
   const editing = target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); $('searchInput').focus(); return; }

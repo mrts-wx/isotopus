@@ -1,3 +1,20 @@
+# Isótopus 0.2.4 — Downloads mais estáveis e navegação organizada
+
+## Downloads em playlists
+
+- Downloads de playlists agora carregam os itens gradualmente e espaçam as requisições para reduzir falhas por excesso de solicitações.
+- yt-dlp tenta novamente erros transitórios de rede, extração e fragmentos, com concorrência de fragmentos limitada.
+- O progresso individual continua no gerenciador de downloads do topo; a página de downloads mostra apenas o estado geral da tarefa.
+- O menu permite acompanhar vários itens, consultar tarefas recentes e limpar o histórico concluído. A lista não exibe scrollbar.
+
+## Interface
+
+- Os botões do gerenciador de downloads e das configurações ficam juntos no topo. A lateral deixa de exibir o cartão de pasta monitorada, liberando espaço para a navegação.
+- A página inicial ganhou destaques de álbuns e artistas da biblioteca.
+- O acrílico do miniplayer ficou mais translúcido e com desfoque mais perceptível nos temas claro e escuro.
+
+---
+
 # Isótopus 0.2.3 — Downloads em lote e mais controle da coleção
 
 ## Baixar música
